@@ -6,8 +6,10 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
 export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  const publicRoutes = ["/login", "/signup"];
-  const isPublicRoute = publicRoutes.some((route) => pathname === route);
+  const authRoutes = ["/login", "/signup"];
+  const isAuthRoute = authRoutes.some((route) => pathname === route);
+  const isInviteRoute = pathname.startsWith("/invite/");
+  const isPublicRoute = isAuthRoute || isInviteRoute;
 
   let supabaseResponse = NextResponse.next({
     request: {
@@ -45,7 +47,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && isPublicRoute) {
+  if (user && isAuthRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";

@@ -2,7 +2,15 @@ import Link from "next/link";
 
 import { AuthForm } from "@/components/AuthForm";
 
-export default function SignupPage() {
+type SignupPageProps = {
+  searchParams: Promise<{
+    redirectTo?: string;
+  }>;
+};
+
+export default async function SignupPage({ searchParams }: SignupPageProps) {
+  const { redirectTo } = await searchParams;
+
   return (
     <main className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-5xl items-center px-6 py-10 md:px-10 md:py-14">
       <section className="grid w-full gap-8 overflow-hidden rounded-4xl border border-black/8 bg-white/84 p-6 shadow-[0_24px_90px_rgba(15,23,42,0.06)] backdrop-blur md:grid-cols-[1fr_0.92fr] md:p-10">
@@ -22,7 +30,11 @@ export default function SignupPage() {
 
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link
-              href="/login"
+              href={
+                redirectTo
+                  ? `/login?redirectTo=${encodeURIComponent(redirectTo)}`
+                  : "/login"
+              }
               className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3"
             >
               Back to login
@@ -31,7 +43,7 @@ export default function SignupPage() {
         </div>
 
         <div className="rounded-4xl border border-black/8 bg-white/88 p-6 md:p-8">
-          <AuthForm mode="signup" />
+          <AuthForm mode="signup" redirectTo={redirectTo} />
         </div>
       </section>
     </main>

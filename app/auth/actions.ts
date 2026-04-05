@@ -18,6 +18,16 @@ const initialState: AuthFormState = {
   errors: {},
 };
 
+function getSafeRedirectPath(value: FormDataEntryValue | string | null | undefined) {
+  const rawValue = typeof value === "string" ? value : value?.toString() ?? "";
+
+  if (!rawValue || !rawValue.startsWith("/") || rawValue.startsWith("//")) {
+    return "/";
+  }
+
+  return rawValue;
+}
+
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -57,6 +67,7 @@ export async function signUp(
   const displayName = formData.get("displayName")?.toString().trim() ?? "";
   const email = formData.get("email")?.toString().trim().toLowerCase() ?? "";
   const password = formData.get("password")?.toString() ?? "";
+  const redirectTo = getSafeRedirectPath(formData.get("redirectTo"));
   const errors = validateCredentials(email, password, displayName);
 
   if (errors.displayName || errors.email || errors.password) {
@@ -84,10 +95,18 @@ export async function signUp(
   }
 
   if (!data.session) {
-    redirect("/login?message=Check%20your%20email%20to%20confirm%20your%20account.");
+    const params = new URLSearchParams({
+      message: "Check your email to confirm your account.",
+    });
+
+    if (redirectTo !== "/") {
+      params.set("redirectTo", redirectTo);
+    }
+
+    redirect(`/login?${params.toString()}`);
   }
 
-  redirect("/");
+  redirect(redirectTo);
 }
 
 export async function login(
@@ -98,6 +117,7 @@ export async function login(
 
   const email = formData.get("email")?.toString().trim().toLowerCase() ?? "";
   const password = formData.get("password")?.toString() ?? "";
+  const redirectTo = getSafeRedirectPath(formData.get("redirectTo"));
   const errors = validateCredentials(email, password);
 
   if (errors.email || errors.password) {
@@ -119,7 +139,7 @@ export async function login(
     };
   }
 
-  redirect("/");
+  redirect(redirectTo);
 }
 
 export async function logout() {

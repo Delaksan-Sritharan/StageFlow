@@ -10,6 +10,7 @@ type AuthMode = "login" | "signup";
 
 type AuthFormProps = {
   mode: AuthMode;
+  redirectTo?: string;
 };
 
 const initialState: AuthFormState = {
@@ -34,12 +35,24 @@ function SubmitButton({ mode }: { mode: AuthMode }) {
   );
 }
 
-export function AuthForm({ mode }: AuthFormProps) {
+function buildAuthHref(pathname: string, redirectTo?: string) {
+  if (!redirectTo) {
+    return pathname;
+  }
+
+  return `${pathname}?redirectTo=${encodeURIComponent(redirectTo)}`;
+}
+
+export function AuthForm({ mode, redirectTo }: AuthFormProps) {
   const action = mode === "signup" ? signUp : login;
   const [state, formAction] = useActionState(action, initialState);
 
   return (
     <form action={formAction} className="space-y-5">
+      {redirectTo ? (
+        <input type="hidden" name="redirectTo" value={redirectTo} />
+      ) : null}
+
       {mode === "signup" ? (
         <div className="space-y-2">
           <label
@@ -116,7 +129,10 @@ export function AuthForm({ mode }: AuthFormProps) {
             ? "Already have an account? "
             : "Need an account? "}
           <Link
-            href={mode === "signup" ? "/login" : "/signup"}
+            href={buildAuthHref(
+              mode === "signup" ? "/login" : "/signup",
+              redirectTo,
+            )}
             className="font-semibold text-black"
           >
             {mode === "signup" ? "Log in" : "Sign up"}

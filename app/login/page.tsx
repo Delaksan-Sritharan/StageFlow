@@ -5,11 +5,12 @@ import { AuthForm } from "@/components/AuthForm";
 type LoginPageProps = {
   searchParams: Promise<{
     message?: string;
+    redirectTo?: string;
   }>;
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const { message } = await searchParams;
+  const { message, redirectTo } = await searchParams;
 
   return (
     <main className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-5xl items-center px-6 py-10 md:px-10 md:py-14">
@@ -30,7 +31,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link
-              href="/signup"
+              href={
+                redirectTo
+                  ? `/signup?redirectTo=${encodeURIComponent(redirectTo)}`
+                  : "/signup"
+              }
               className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3"
             >
               Create account
@@ -44,7 +49,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               {message}
             </p>
           ) : null}
-          <AuthForm mode="login" />
+          <AuthForm mode="login" redirectTo={redirectTo} />
         </div>
       </section>
     </main>

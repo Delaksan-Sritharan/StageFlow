@@ -43,6 +43,7 @@ Required variables:
 
 - `/login` log in with Supabase Auth
 - `/signup` sign up with email and password
+- `/invite/[token]` invited participant join page with auth redirect and role acceptance
 - `/` overview page with timer preview and roadmap
 - `/timer` dedicated timer mode
 - `/session/create` session creation form with Supabase save and redirect
@@ -61,6 +62,13 @@ The schema now also provisions authentication support:
 
 - `public.users` synced from `auth.users`
 - authenticated ownership policies for sessions, speakers, and feedback
+- invite lookup and acceptance RPC helpers for participant join links
+
+If invite links are the only missing piece in an existing database, you can run:
+
+```bash
+supabase/enable-invite-join-links.sql
+```
 
 ## Deployment
 
