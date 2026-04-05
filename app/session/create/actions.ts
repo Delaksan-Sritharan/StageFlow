@@ -49,9 +49,21 @@ export async function createSession(
 
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return {
+      errors: {
+        form: "You must be logged in to create a session.",
+      },
+    };
+  }
+
   const { data, error } = await supabase
     .from("sessions")
-    .insert({ title, date })
+    .insert({ title, date, user_id: user.id })
     .select("id")
     .single();
 

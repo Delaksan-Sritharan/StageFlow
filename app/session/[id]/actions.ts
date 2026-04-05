@@ -96,6 +96,18 @@ export async function addSpeaker(
 
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return {
+      errors: {
+        form: "You must be logged in to add speakers.",
+      },
+    };
+  }
+
   const { error } = await supabase.from("speakers").insert({
     session_id: sessionId,
     name,
@@ -161,6 +173,18 @@ export async function submitFeedback(
 
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return {
+      errors: {
+        form: "You must be logged in to submit feedback.",
+      },
+    };
+  }
+
   const { error } = await supabase.from("feedback").insert({
     speaker_id: speakerId,
     content_score: contentScore,

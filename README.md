@@ -41,6 +41,8 @@ Required variables:
 
 ## Current routes
 
+- `/login` log in with Supabase Auth
+- `/signup` sign up with email and password
 - `/` overview page with timer preview and roadmap
 - `/timer` dedicated timer mode
 - `/session/create` session creation form with Supabase save and redirect
@@ -54,6 +56,11 @@ Run the checked-in schema for sessions in the Supabase SQL editor:
 ```bash
 supabase/sessions.sql
 ```
+
+The schema now also provisions authentication support:
+
+- `public.users` synced from `auth.users`
+- authenticated ownership policies for sessions, speakers, and feedback
 
 ## Deployment
 

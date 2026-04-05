@@ -1,4 +1,8 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
+
+import { logout } from "@/app/auth/actions";
+import { createClient } from "@/utils/supabase/server";
 
 const navLinks = [
   { href: "/", label: "Sessions" },
@@ -6,7 +10,18 @@ const navLinks = [
   { href: "/session/create", label: "Create Session" },
 ];
 
-export function AppNavbar() {
+export async function AppNavbar() {
+  const cookieStore = await cookies();
+  const supabase = createClient(cookieStore);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const displayName =
+    user?.user_metadata?.display_name ||
+    user?.email?.split("@")[0] ||
+    "Account";
+
   return (
     <header className="sticky top-0 z-40 border-b border-black/8 bg-white/72 backdrop-blur-xl">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-5 py-4 md:flex-row md:items-center md:justify-between md:px-8">
@@ -23,15 +38,48 @@ export function AppNavbar() {
         </div>
 
         <nav className="flex flex-wrap items-center gap-2">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white/72 px-4 py-2 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3"
-            >
-              {link.label}
-            </Link>
-          ))}
+          {user
+            ? navLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white/72 px-4 py-2 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3"
+                >
+                  {link.label}
+                </Link>
+              ))
+            : null}
+
+          {user ? (
+            <>
+              <span className="inline-flex items-center justify-center rounded-full border border-black/10 bg-black/3 px-4 py-2 text-sm font-semibold text-black">
+                {displayName}
+              </span>
+              <form action={logout}>
+                <button
+                  type="submit"
+                  className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white/72 px-4 py-2 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3"
+                >
+                  Logout
+                </button>
+              </form>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white/72 px-4 py-2 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3"
+              >
+                Log in
+              </Link>
+              <Link
+                href="/signup"
+                className="inline-flex items-center justify-center rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition-colors duration-200"
+              >
+                Sign up
+              </Link>
+            </>
+          )}
         </nav>
       </div>
     </header>
