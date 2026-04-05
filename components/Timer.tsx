@@ -6,6 +6,8 @@ type TimerProps = {
   minTime: number;
   maxTime: number;
   className?: string;
+  canStart?: boolean;
+  startDisabledMessage?: string;
 };
 
 type TimerTone = "green" | "yellow" | "red";
@@ -72,7 +74,13 @@ function getTone(
   return "green";
 }
 
-export function Timer({ minTime, maxTime, className }: TimerProps) {
+export function Timer({
+  minTime,
+  maxTime,
+  className,
+  canStart = true,
+  startDisabledMessage,
+}: TimerProps) {
   const minThreshold = Math.max(0, Math.floor(minTime));
   const maxThreshold = Math.max(minThreshold, Math.floor(maxTime));
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -187,7 +195,7 @@ export function Timer({ minTime, maxTime, className }: TimerProps) {
           className={`h-2 overflow-hidden rounded-full ${currentStyles.track}`}
         >
           <div
-            className={`h-full rounded-full bg-gradient-to-r ${currentStyles.progress} transition-[width,background] duration-500`}
+            className={`h-full rounded-full bg-linear-to-r ${currentStyles.progress} transition-[width,background] duration-500`}
             style={{ width: progressWidth }}
           />
         </div>
@@ -196,7 +204,7 @@ export function Timer({ minTime, maxTime, className }: TimerProps) {
           <button
             type="button"
             onClick={handleStart}
-            disabled={isRunning}
+            disabled={isRunning || !canStart}
             className="inline-flex items-center justify-center rounded-full bg-black px-4 py-3 text-sm font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
           >
             Start
@@ -205,18 +213,24 @@ export function Timer({ minTime, maxTime, className }: TimerProps) {
             type="button"
             onClick={handlePause}
             disabled={!isRunning}
-            className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/[0.03] disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Pause
           </button>
           <button
             type="button"
             onClick={handleReset}
-            className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/[0.03]"
+            className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3"
           >
             Reset
           </button>
         </div>
+
+        {!canStart && startDisabledMessage ? (
+          <p className="text-sm leading-7 text-black/56">
+            {startDisabledMessage}
+          </p>
+        ) : null}
       </div>
 
       <div className="relative flex flex-wrap items-center justify-center gap-3 text-sm text-black/60">

@@ -440,7 +440,7 @@ with check (
     select 1
     from public.speakers
     where public.speakers.id = public.feedback.speaker_id
-      and public.is_session_creator(public.speakers.session_id)
+      and public.can_access_session(public.speakers.session_id)
   )
 );
 

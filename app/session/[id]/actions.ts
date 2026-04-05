@@ -162,6 +162,16 @@ export async function addSpeaker(
     };
   }
 
+  const isCreator = await userOwnsSession(supabase, sessionId, user.id);
+
+  if (!isCreator) {
+    return {
+      errors: {
+        form: "Only the session creator can add speakers.",
+      },
+    };
+  }
+
   const { error } = await supabase.from("speakers").insert({
     session_id: sessionId,
     name,
