@@ -22,4 +22,5 @@ export type Feedback = {
   deliveryScore: number;
   confidenceScore: number;
   comment: string | null;
+  createdAt?: string;
 };

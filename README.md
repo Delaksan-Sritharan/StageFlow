@@ -43,15 +43,38 @@ Required variables:
 
 - `/` overview page with timer preview and roadmap
 - `/timer` dedicated timer mode
-- `/session/create` scaffold for session creation
-- `/session/[id]` scaffold for session detail
+- `/session/create` session creation form with Supabase save and redirect
+- `/session/[id]` session detail page backed by Supabase
+- `/session/[id]/summary` session summary page showing speakers and feedback
+
+## Database setup
+
+Run the checked-in schema for sessions in the Supabase SQL editor:
+
+```bash
+supabase/sessions.sql
+```
+
+## Deployment
+
+Deploy on Vercel:
+
+1. Push the repository to GitHub.
+2. In Vercel, choose `Add New Project` and import the repository.
+3. Set these environment variables in the Vercel project settings:
+   `NEXT_PUBLIC_SUPABASE_URL`
+   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`
+4. Keep the default build command: `next build`.
+5. Keep the default output setting detected by Vercel for Next.js.
+6. Deploy the project.
+7. After the first deploy, run the SQL in `supabase/sessions.sql` for the production Supabase project if you have not already.
 
 ## Next implementation steps
 
-1. Create the Supabase schema for sessions, speakers, and feedback.
-2. Build the session creation flow and list view.
-3. Add speaker management and per-speaker timing presets.
-4. Store and display feedback in the session summary.
+1. Add editing and deletion for sessions, speakers, and feedback.
+2. Connect speaker timing presets to the live timer route.
+3. Build a dedicated session summary view from the stored feedback.
+4. Add authentication before enabling write access beyond the prototype stage.
 
 ## Validation
 

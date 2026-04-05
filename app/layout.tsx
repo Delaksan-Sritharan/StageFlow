@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { AppNavbar } from "@/components/AppNavbar";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -16,6 +17,7 @@ export const metadata: Metadata = {
   title: "StageFlow",
   description:
     "Open source speaker timer and session manager for live speaking events.",
+  metadataBase: new URL("https://stageflow.vercel.app"),
 };
 
 export default function RootLayout({
@@ -28,7 +30,10 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        <AppNavbar />
+        <div className="flex-1">{children}</div>
+      </body>
     </html>
   );
 }

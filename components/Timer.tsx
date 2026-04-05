@@ -165,7 +165,7 @@ export function Timer({ minTime, maxTime, className }: TimerProps) {
 
   return (
     <section
-      className={`relative mx-auto flex w-full max-w-3xl flex-col items-center gap-8 overflow-hidden rounded-[2rem] border px-6 py-10 text-center transition-[border-color,box-shadow,background-color] duration-500 ${currentStyles.surface} ${currentStyles.glow} ${className ?? ""}`}
+      className={`relative mx-auto flex w-full max-w-3xl flex-col items-center gap-6 overflow-hidden rounded-4xl border px-5 py-8 text-center transition-[border-color,box-shadow,background-color] duration-500 sm:px-6 sm:py-10 ${currentStyles.surface} ${currentStyles.glow} ${className ?? ""}`}
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.94),rgba(255,255,255,0.72))]" />
 
@@ -192,7 +192,7 @@ export function Timer({ minTime, maxTime, className }: TimerProps) {
           />
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <button
             type="button"
             onClick={handleStart}
