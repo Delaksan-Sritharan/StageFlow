@@ -7,7 +7,7 @@ type DashboardSessionCardProps = {
     id: string;
     title: string;
     date: string;
-    userId: string | null;
+    creatorId: string | null;
   };
   participantCount: number;
   isCreator: boolean;

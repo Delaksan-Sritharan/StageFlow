@@ -3,9 +3,11 @@ import { cookies } from "next/headers";
 
 import { FeedbackForm } from "@/components/FeedbackForm";
 import { FeedbackList } from "@/components/FeedbackList";
+import { InviteParticipantForm } from "@/components/InviteParticipantForm";
 import { SpeakerForm } from "@/components/SpeakerForm";
 import { SpeakerList } from "@/components/SpeakerList";
-import type { Feedback, Speaker } from "@/types";
+import { SessionInvitationsList } from "@/components/SessionInvitationsList";
+import type { Feedback, SessionParticipant, Speaker } from "@/types";
 import { createClient } from "@/utils/supabase/server";
 
 type SessionDetailPageProps = {
@@ -13,6 +15,19 @@ type SessionDetailPageProps = {
     id: string;
   }>;
 };
+
+function getSessionOwnerId(
+  session: {
+    creator_id?: string | null;
+    user_id?: string | null;
+  } | null,
+) {
+  if (!session) {
+    return null;
+  }
+
+  return session.creator_id ?? session.user_id ?? null;
+}
 
 function isMissingSessionsTable(
   error: { code?: string; message?: string } | null,
@@ -53,17 +68,48 @@ function isMissingFeedbackTable(
   );
 }
 
+function isMissingParticipantsTable(
+  error: { code?: string; message?: string } | null,
+) {
+  if (!error) {
+    return false;
+  }
+
+  return (
+    error.code === "PGRST205" ||
+    error.message?.includes(
+      "Could not find the table 'public.session_participants'",
+    )
+  );
+}
+
+function isBrokenParticipantsPolicy(error: { message?: string } | null) {
+  return Boolean(
+    error?.message?.includes(
+      'infinite recursion detected in policy for relation "session_participants"',
+    ),
+  );
+}
+
 export default async function SessionDetailPage({
   params,
 }: SessionDetailPageProps) {
   const { id } = await params;
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const { data: session, error } = await supabase
     .from("sessions")
-    .select("id, title, date")
+    .select("*")
     .eq("id", id)
     .single();
+  const { data: participantsData, error: participantsError } = await supabase
+    .from("session_participants")
+    .select("*")
+    .eq("session_id", id)
+    .order("created_at", { ascending: true });
   const { data: speakersData, error: speakersError } = await supabase
     .from("speakers")
     .select("id, session_id, name, role, min_time, max_time")
@@ -76,9 +122,34 @@ export default async function SessionDetailPage({
     )
     .order("created_at", { ascending: false });
 
-  const showSetupState = isMissingSessionsTable(error);
+  const showSetupState =
+    isMissingSessionsTable(error) || isBrokenParticipantsPolicy(error);
+  const showParticipantsSetupState =
+    isMissingParticipantsTable(participantsError) ||
+    isBrokenParticipantsPolicy(participantsError);
   const showSpeakersSetupState = isMissingSpeakersTable(speakersError);
   const showFeedbackSetupState = isMissingFeedbackTable(feedbackError);
+  const sessionOwnerId = getSessionOwnerId(session);
+  const isCreator = sessionOwnerId === user?.id;
+  const participants: SessionParticipant[] =
+    participantsData
+      ?.map((participant) => ({
+        id: String(participant.id),
+        sessionId: String(participant.session_id),
+        userId: participant.user_id ? String(participant.user_id) : null,
+        invitedEmail: participant.invited_email ?? null,
+        role: participant.role ?? null,
+        accepted: participant.accepted ?? true,
+        inviteToken: participant.invite_token ?? null,
+      }))
+      .filter(
+        (participant) =>
+          !(
+            participant.userId === sessionOwnerId &&
+            participant.accepted &&
+            !participant.role
+          ),
+      ) ?? [];
   const speakers: Speaker[] =
     speakersData?.map((speaker) => ({
       id: String(speaker.id),
@@ -141,7 +212,9 @@ export default async function SessionDetailPage({
             The sessions table is not set up yet.
           </h2>
           <p className="mt-3 leading-7 text-black/70">
-            Run the SQL in supabase/sessions.sql, then reload this page.
+            Run supabase/fix-session-participant-policies.sql if your tables
+            already exist, or supabase/sessions.sql for a full setup, then
+            reload this page.
           </p>
         </section>
       ) : error ? (
@@ -175,6 +248,64 @@ export default async function SessionDetailPage({
               </p>
             </article>
           </section>
+
+          {isCreator ? (
+            <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+              <section className="rounded-4xl border border-black/8 bg-white/84 p-8 shadow-[0_24px_90px_rgba(15,23,42,0.06)] backdrop-blur">
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-black/42">
+                    Invitations
+                  </p>
+                  <h2 className="text-2xl font-semibold tracking-[-0.04em] text-black">
+                    Invite participants
+                  </h2>
+                  <p className="text-sm leading-7 text-black/62">
+                    Invite by email or generate a shareable invite link, then
+                    assign the participant role before they join.
+                  </p>
+                </div>
+
+                <div className="mt-6">
+                  {showParticipantsSetupState ? (
+                    <p className="rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                      The session participants table is not set up yet. Run the
+                      SQL in supabase/sessions.sql and reload this page.
+                    </p>
+                  ) : participantsError ? (
+                    <p className="rounded-3xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                      Failed to load invitations: {participantsError.message}
+                    </p>
+                  ) : (
+                    <InviteParticipantForm sessionId={id} />
+                  )}
+                </div>
+              </section>
+
+              <section className="rounded-4xl border border-black/8 bg-white/84 p-8 shadow-[0_24px_90px_rgba(15,23,42,0.06)] backdrop-blur">
+                <div className="mb-6 space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-black/42">
+                    Invitations
+                  </p>
+                  <h2 className="text-2xl font-semibold tracking-[-0.04em] text-black">
+                    Pending and accepted invites
+                  </h2>
+                </div>
+
+                {showParticipantsSetupState ? (
+                  <p className="rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                    Run the SQL in supabase/sessions.sql to enable invitation
+                    storage.
+                  </p>
+                ) : participantsError ? (
+                  <p className="rounded-3xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    Failed to load invitations: {participantsError.message}
+                  </p>
+                ) : (
+                  <SessionInvitationsList invitations={participants} />
+                )}
+              </section>
+            </section>
+          ) : null}
 
           <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
             <section className="rounded-4xl border border-black/8 bg-white/84 p-8 shadow-[0_24px_90px_rgba(15,23,42,0.06)] backdrop-blur">

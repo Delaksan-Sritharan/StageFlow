@@ -5,6 +5,13 @@ import { DashboardSessionCard } from "@/components/DashboardSessionCard";
 import { Timer } from "@/components/Timer";
 import { createClient } from "@/utils/supabase/server";
 
+function getSessionOwnerId(session: {
+  creator_id?: string | null;
+  user_id?: string | null;
+}) {
+  return session.creator_id ?? session.user_id ?? null;
+}
+
 function isMissingSessionsTable(
   error: { code?: string; message?: string } | null,
 ) {
@@ -33,30 +40,47 @@ function isMissingParticipantsTable(
   );
 }
 
+function isBrokenParticipantsPolicy(error: { message?: string } | null) {
+  return Boolean(
+    error?.message?.includes(
+      'infinite recursion detected in policy for relation "session_participants"',
+    ),
+  );
+}
+
 export default async function Page() {
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
   const { data: sessions, error } = await supabase
     .from("sessions")
-    .select("id, title, date, user_id")
+    .select("*")
     .order("date", { ascending: true });
+
   const sessionIds = sessions?.map((session) => session.id) ?? [];
   const { data: participantRows, error: participantsError } = sessionIds.length
     ? await supabase
         .from("session_participants")
-        .select("session_id, user_id")
+        .select("*")
         .in("session_id", sessionIds)
     : { data: [], error: null };
-  const showSetupState = isMissingSessionsTable(error);
+
+  const showSetupState =
+    isMissingSessionsTable(error) || isBrokenParticipantsPolicy(error);
   const showParticipantsSetupState =
-    isMissingParticipantsTable(participantsError);
+    isMissingParticipantsTable(participantsError) ||
+    isBrokenParticipantsPolicy(participantsError);
 
   const participantCountBySession = new Map<string, number>();
 
   participantRows?.forEach((row) => {
+    if (row.accepted === false) {
+      return;
+    }
+
     const sessionId = String(row.session_id);
     participantCountBySession.set(
       sessionId,
@@ -91,7 +115,7 @@ export default async function Page() {
                 href="/session/create"
                 className="inline-flex items-center justify-center rounded-full bg-black px-5 py-3 text-sm font-semibold text-white transition-transform duration-200 hover:-translate-y-0.5"
               >
-                Create session
+                Create new session
               </Link>
               <Link
                 href="/timer"
@@ -131,8 +155,9 @@ export default async function Page() {
                 The dashboard tables are not set up yet.
               </h3>
               <p className="leading-7 text-black/70">
-                Run the checked-in schema in supabase/sessions.sql, then refresh
-                this page.
+                Run supabase/fix-session-participant-policies.sql if your tables
+                already exist, or supabase/sessions.sql for a full setup, then
+                refresh this page.
               </p>
             </div>
           </section>
@@ -153,12 +178,12 @@ export default async function Page() {
                   id: String(session.id),
                   title: session.title,
                   date: session.date,
-                  userId: session.user_id,
+                  creatorId: getSessionOwnerId(session),
                 }}
                 participantCount={
                   participantCountBySession.get(String(session.id)) ?? 1
                 }
-                isCreator={session.user_id === user?.id}
+                isCreator={getSessionOwnerId(session) === user?.id}
               />
             ))}
           </div>
@@ -168,8 +193,9 @@ export default async function Page() {
               No sessions yet.
             </h3>
             <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-black/62">
-              Create your first session to start adding speakers, collecting
-              feedback, and generating a summary for live use.
+              Create your first session to start inviting participants, adding
+              speakers, collecting feedback, and generating a summary for live
+              use.
             </p>
             <div className="mt-5 flex justify-center">
               <Link

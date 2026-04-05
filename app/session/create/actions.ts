@@ -6,6 +6,93 @@ import { cookies } from "next/headers";
 
 import { createClient } from "@/utils/supabase/server";
 
+function isMissingCreatorIdColumn(error: { message?: string } | null) {
+  return Boolean(error?.message?.includes("creator_id"));
+}
+
+function isSessionsInsertPolicyMismatch(error: {
+  code?: string;
+  message?: string;
+} | null) {
+  return Boolean(
+    error?.code === "42501" ||
+      error?.message?.includes(
+        'new row violates row-level security policy for table "sessions"',
+      ),
+  );
+}
+
+async function insertSessionWithCompatibility(
+  supabase: ReturnType<typeof createClient>,
+  values: { title: string; date: string },
+  userId: string,
+) {
+  const attempts = [
+    { ...values, creator_id: userId, user_id: userId },
+    { ...values, creator_id: userId },
+    { ...values, user_id: userId },
+  ];
+
+  let lastResult: {
+    data: { id: string } | null;
+    error: { code?: string; message?: string } | null;
+  } = {
+    data: null,
+    error: null,
+  };
+
+  for (const payload of attempts) {
+    const result = await supabase.from("sessions").insert(payload);
+
+    lastResult = {
+      data: null,
+      error: result.error,
+    };
+
+    if (!result.error) {
+      return lastResult;
+    }
+
+    const shouldContinue =
+      isMissingCreatorIdColumn(result.error) ||
+      isSessionsInsertPolicyMismatch(result.error);
+
+    if (!shouldContinue) {
+      return lastResult;
+    }
+  }
+
+  return lastResult;
+}
+
+async function findRecentlyCreatedSessionId(
+  supabase: ReturnType<typeof createClient>,
+  values: { title: string; date: string },
+  createdAfter: string,
+  userId: string,
+) {
+  const ownerFilters = [
+    `creator_id.eq.${userId}`,
+    `user_id.eq.${userId}`,
+  ];
+
+  const { data, error } = await supabase
+    .from("sessions")
+    .select("id, created_at")
+    .eq("title", values.title)
+    .eq("date", values.date)
+    .gte("created_at", createdAfter)
+    .or(ownerFilters.join(","))
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return {
+    data: data ? { id: String(data.id) } : null,
+    error,
+  };
+}
+
 export type SessionFormState = {
   errors?: {
     title?: string;
@@ -61,22 +148,48 @@ export async function createSession(
     };
   }
 
-  const { data, error } = await supabase
-    .from("sessions")
-    .insert({ title, date, user_id: user.id })
-    .select("id")
-    .single();
+  const createdAfter = new Date().toISOString();
+  const insertResult = await insertSessionWithCompatibility(
+    supabase,
+    { title, date },
+    user.id,
+  );
+
+  let data = insertResult.data;
+  let error = insertResult.error;
+
+  if (!error) {
+    const fetchResult = await findRecentlyCreatedSessionId(
+      supabase,
+      { title, date },
+      createdAfter,
+      user.id,
+    );
+
+    data = fetchResult.data;
+    error = fetchResult.error;
+  }
 
   if (error) {
     const isMissingTable =
       error.code === "PGRST205" ||
-      error.message.includes("Could not find the table 'public.sessions'");
+      error.message?.includes("Could not find the table 'public.sessions'");
 
     return {
       errors: {
         form: isMissingTable
           ? "The sessions table is not set up yet. Run the SQL in supabase/sessions.sql and try again."
+          : isSessionsInsertPolicyMismatch(error)
+            ? "The session insert policy in Supabase is still outdated. Run supabase/fix-session-participant-policies.sql and try again."
           : `Failed to save session: ${error.message}`,
+      },
+    };
+  }
+
+  if (!data) {
+    return {
+      errors: {
+        form: "Failed to save session.",
       },
     };
   }

@@ -2,8 +2,19 @@ export type SpeakerRole = "Speaker" | "Evaluator" | "Table Topics";
 
 export type Session = {
   id: string;
+  creatorId?: string | null;
   title: string;
   date: string;
+};
+
+export type SessionParticipant = {
+  id: string;
+  sessionId: string;
+  userId: string | null;
+  invitedEmail: string | null;
+  role: SpeakerRole | null;
+  accepted: boolean;
+  inviteToken: string | null;
 };
 
 export type Speaker = {

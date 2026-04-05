@@ -25,11 +25,25 @@ export type FeedbackFormState = {
   };
 };
 
+export type InviteParticipantFormState = {
+  errors?: {
+    invitedEmail?: string;
+    role?: string;
+    form?: string;
+  };
+  message?: string;
+  inviteLink?: string;
+};
+
 const initialState: SpeakerFormState = {
   errors: {},
 };
 
 const initialFeedbackState: FeedbackFormState = {
+  errors: {},
+};
+
+const initialInviteState: InviteParticipantFormState = {
   errors: {},
 };
 
@@ -51,6 +65,46 @@ function parseScore(value: string) {
   }
 
   return parsed;
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isMissingCreatorIdColumn(error: { message?: string } | null) {
+  return Boolean(error?.message?.includes("creator_id"));
+}
+
+function hasBrokenParticipantsPolicy(error: { message?: string } | null) {
+  return Boolean(
+    error?.message?.includes(
+      'infinite recursion detected in policy for relation "session_participants"',
+    ),
+  );
+}
+
+async function userOwnsSession(supabase: ReturnType<typeof createClient>, sessionId: string, userId: string) {
+  const { data, error } = await supabase
+    .from("sessions")
+    .select("id")
+    .eq("id", sessionId)
+    .eq("creator_id", userId)
+    .maybeSingle();
+
+  let ownedSession = data;
+
+  if (isMissingCreatorIdColumn(error)) {
+    const fallbackResult = await supabase
+      .from("sessions")
+      .select("id")
+      .eq("id", sessionId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    ownedSession = fallbackResult.data;
+  }
+
+  return Boolean(ownedSession);
 }
 
 export async function addSpeaker(
@@ -210,4 +264,103 @@ export async function submitFeedback(
   revalidatePath(`/session/${sessionId}`);
 
   return initialFeedbackState;
+}
+
+export async function createInvitation(
+  sessionId: string,
+  _prevState: InviteParticipantFormState = initialInviteState,
+  formData: FormData,
+): Promise<InviteParticipantFormState> {
+  void _prevState;
+
+  const inviteMode = formData.get("inviteMode")?.toString() === "link" ? "link" : "email";
+  const invitedEmail = formData.get("invitedEmail")?.toString().trim().toLowerCase() ?? "";
+  const role = formData.get("role")?.toString().trim() ?? "";
+
+  const errors: InviteParticipantFormState["errors"] = {};
+
+  if (!validRoles.includes(role as SpeakerRole)) {
+    errors.role = "Choose a valid role.";
+  }
+
+  if (inviteMode === "email" && !invitedEmail) {
+    errors.invitedEmail = "Email is required when saving an email invite.";
+  } else if (invitedEmail && !isValidEmail(invitedEmail)) {
+    errors.invitedEmail = "Enter a valid email address.";
+  }
+
+  if (errors.invitedEmail || errors.role) {
+    return { errors };
+  }
+
+  const cookieStore = await cookies();
+  const supabase = createClient(cookieStore);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return {
+      errors: {
+        form: "You must be logged in to create invitations.",
+      },
+    };
+  }
+
+  const isCreator = await userOwnsSession(supabase, sessionId, user.id);
+
+  if (!isCreator) {
+    return {
+      errors: {
+        form: "Only the session creator can invite participants.",
+      },
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("session_participants")
+    .insert({
+      session_id: sessionId,
+      invited_email: inviteMode === "email" ? invitedEmail : null,
+      role,
+      accepted: false,
+    })
+    .select("invite_token")
+    .single();
+
+  if (error) {
+    const isMissingTable =
+      error.code === "PGRST205" ||
+      error.message.includes("Could not find the table 'public.session_participants'");
+    const isMissingInvitationColumns =
+      error.message.includes("invited_email") ||
+      error.message.includes("invite_token") ||
+      error.message.includes("accepted") ||
+      error.message.includes("role");
+    const isBrokenPolicy = hasBrokenParticipantsPolicy(error);
+
+    return {
+      errors: {
+        form:
+          isMissingTable || isMissingInvitationColumns || isBrokenPolicy
+            ? "The invitation schema or participant policies are not set up yet. Run the SQL in supabase/sessions.sql and try again."
+            : `Failed to save invitation: ${error.message}`,
+      },
+    };
+  }
+
+  revalidatePath(`/session/${sessionId}`);
+
+  if (inviteMode === "link") {
+    return {
+      errors: {},
+      message: "Invite link generated.",
+      inviteLink: `/invite/${data.invite_token}`,
+    };
+  }
+
+  return {
+    errors: {},
+    message: `Invitation saved for ${invitedEmail}.`,
+  };
 }
