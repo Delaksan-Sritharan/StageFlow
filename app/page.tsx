@@ -87,12 +87,7 @@ export default function Home() {
       </section>
 
       <div className="grid gap-8 xl:grid-cols-[1.2fr_0.8fr]">
-        <Timer
-          speakerName="Aisha Carter"
-          role="Prepared Speech"
-          minTimeSeconds={300}
-          maxTimeSeconds={420}
-        />
+        <Timer minTime={300} maxTime={420} />
 
         <section className="rounded-[2rem] border border-black/8 bg-white/84 p-6 shadow-[0_24px_90px_rgba(15,23,42,0.06)] backdrop-blur md:p-8">
           <div className="space-y-6">

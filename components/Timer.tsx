@@ -1,50 +1,49 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type TimerProps = {
-  speakerName?: string;
-  role?: string;
-  minTimeSeconds: number;
-  maxTimeSeconds: number;
+  minTime: number;
+  maxTime: number;
+  className?: string;
 };
 
-type TimerPhase = "green" | "yellow" | "red";
+type TimerTone = "green" | "yellow" | "red";
 
-const phaseStyles: Record<
-  TimerPhase,
+const toneStyles: Record<
+  TimerTone,
   {
-    accent: string;
-    badge: string;
+    surface: string;
     glow: string;
-    ring: string;
+    text: string;
+    track: string;
     progress: string;
-    label: string;
+    badge: string;
   }
 > = {
   green: {
-    accent: "text-emerald-600",
-    badge: "bg-emerald-100 text-emerald-700",
-    glow: "shadow-[0_0_80px_rgba(16,185,129,0.24)]",
-    ring: "ring-emerald-200",
+    surface: "border-emerald-200/70 bg-white/88",
+    glow: "shadow-[0_30px_90px_rgba(16,185,129,0.18)]",
+    text: "text-emerald-600",
+    track: "bg-emerald-100/80",
     progress: "from-emerald-400 to-emerald-600",
-    label: "Within minimum time",
+    badge: "bg-emerald-100 text-emerald-700",
   },
   yellow: {
-    accent: "text-amber-500",
-    badge: "bg-amber-100 text-amber-700",
-    glow: "shadow-[0_0_80px_rgba(245,158,11,0.24)]",
-    ring: "ring-amber-200",
+    surface: "border-amber-200/80 bg-white/90",
+    glow: "shadow-[0_30px_90px_rgba(245,158,11,0.18)]",
+    text: "text-amber-500",
+    track: "bg-amber-100/80",
     progress: "from-amber-300 to-amber-500",
-    label: "Warning phase",
+    badge: "bg-amber-100 text-amber-700",
   },
   red: {
-    accent: "text-rose-500",
-    badge: "bg-rose-100 text-rose-700",
-    glow: "shadow-[0_0_80px_rgba(244,63,94,0.24)]",
-    ring: "ring-rose-200",
+    surface: "border-rose-200/80 bg-white/92",
+    glow: "shadow-[0_30px_90px_rgba(244,63,94,0.18)]",
+    text: "text-rose-500",
+    track: "bg-rose-100/80",
     progress: "from-rose-400 to-rose-600",
-    label: "Overtime",
+    badge: "bg-rose-100 text-rose-700",
   },
 };
 
@@ -57,12 +56,25 @@ function formatTime(totalSeconds: number) {
   return `${minutes}:${seconds}`;
 }
 
-export function Timer({
-  speakerName = "Demo Speaker",
-  role = "Speaker",
-  minTimeSeconds,
-  maxTimeSeconds,
-}: TimerProps) {
+function getTone(
+  elapsedSeconds: number,
+  minTime: number,
+  maxTime: number,
+): TimerTone {
+  if (elapsedSeconds > maxTime) {
+    return "red";
+  }
+
+  if (elapsedSeconds >= minTime) {
+    return "yellow";
+  }
+
+  return "green";
+}
+
+export function Timer({ minTime, maxTime, className }: TimerProps) {
+  const minThreshold = Math.max(0, Math.floor(minTime));
+  const maxThreshold = Math.max(minThreshold, Math.floor(maxTime));
   const [elapsedMs, setElapsedMs] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const frameRef = useRef<number | null>(null);
@@ -84,7 +96,9 @@ export function Timer({
         startedAtRef.current = timestamp;
       }
 
-      setElapsedMs(storedElapsedRef.current + (timestamp - startedAtRef.current));
+      setElapsedMs(
+        storedElapsedRef.current + (timestamp - startedAtRef.current),
+      );
       frameRef.current = requestAnimationFrame(tick);
     };
 
@@ -107,31 +121,27 @@ export function Timer({
   }, []);
 
   const elapsedSeconds = Math.floor(elapsedMs / 1000);
-  const phase: TimerPhase = useMemo(() => {
-    if (elapsedSeconds >= maxTimeSeconds) {
-      return "red";
-    }
-
-    if (elapsedSeconds >= minTimeSeconds) {
-      return "yellow";
-    }
-
-    return "green";
-  }, [elapsedSeconds, maxTimeSeconds, minTimeSeconds]);
-
-  const progressWidth = `${Math.min((elapsedSeconds / maxTimeSeconds) * 100, 100)}%`;
-  const currentStyles = phaseStyles[phase];
+  const tone = getTone(elapsedSeconds, minThreshold, maxThreshold);
+  const progressWidth = `${Math.min((elapsedSeconds / maxThreshold) * 100, 100)}%`;
+  const currentStyles = toneStyles[tone];
 
   const handleStart = () => {
     if (isRunning) {
-      storedElapsedRef.current = elapsedMs;
-      startedAtRef.current = null;
-      setIsRunning(false);
       return;
     }
 
     startedAtRef.current = null;
     setIsRunning(true);
+  };
+
+  const handlePause = () => {
+    if (!isRunning) {
+      return;
+    }
+
+    storedElapsedRef.current = elapsedMs;
+    startedAtRef.current = null;
+    setIsRunning(false);
   };
 
   const handleReset = () => {
@@ -146,87 +156,75 @@ export function Timer({
     setIsRunning(false);
   };
 
+  const statusLabel =
+    tone === "green"
+      ? "Below minimum time"
+      : tone === "yellow"
+        ? "Within target window"
+        : "Past maximum time";
+
   return (
-    <section className="relative overflow-hidden rounded-[2rem] border border-black/8 bg-white/90 p-6 shadow-[0_24px_90px_rgba(15,23,42,0.08)] backdrop-blur md:p-8">
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/20 to-transparent" />
+    <section
+      className={`relative mx-auto flex w-full max-w-3xl flex-col items-center gap-8 overflow-hidden rounded-[2rem] border px-6 py-10 text-center transition-[border-color,box-shadow,background-color] duration-500 ${currentStyles.surface} ${currentStyles.glow} ${className ?? ""}`}
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.94),rgba(255,255,255,0.72))]" />
 
-      <div className="flex flex-col gap-8">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="space-y-2">
-            <span
-              className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${currentStyles.badge}`}
-            >
-              {currentStyles.label}
-            </span>
-            <div>
-              <p className="text-xs uppercase tracking-[0.28em] text-black/45">
-                Active speaker
-              </p>
-              <h2 className="text-2xl font-semibold tracking-[-0.04em] text-black">
-                {speakerName}
-              </h2>
-              <p className="text-sm text-black/60">{role}</p>
-            </div>
-          </div>
+      <div className="relative flex flex-col items-center gap-4">
+        <span
+          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] transition-colors duration-500 ${currentStyles.badge}`}
+        >
+          {statusLabel}
+        </span>
+        <p
+          className={`font-mono text-[clamp(4.5rem,18vw,9rem)] font-semibold tracking-[-0.08em] transition-colors duration-500 ${currentStyles.text}`}
+        >
+          {formatTime(elapsedSeconds)}
+        </p>
+      </div>
 
-          <div className="grid grid-cols-2 gap-3 text-sm text-black/60">
-            <div className="rounded-2xl border border-black/8 bg-black/[0.02] px-4 py-3">
-              <p className="text-xs uppercase tracking-[0.22em] text-black/40">Min</p>
-              <p className="mt-2 font-mono text-lg text-black">
-                {formatTime(minTimeSeconds)}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-black/8 bg-black/[0.02] px-4 py-3">
-              <p className="text-xs uppercase tracking-[0.22em] text-black/40">Max</p>
-              <p className="mt-2 font-mono text-lg text-black">
-                {formatTime(maxTimeSeconds)}
-              </p>
-            </div>
-          </div>
+      <div className="relative w-full max-w-lg space-y-5">
+        <div
+          className={`h-2 overflow-hidden rounded-full ${currentStyles.track}`}
+        >
+          <div
+            className={`h-full rounded-full bg-gradient-to-r ${currentStyles.progress} transition-[width,background] duration-500`}
+            style={{ width: progressWidth }}
+          />
         </div>
 
-        <div
-          className={`relative rounded-[2rem] border border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(247,245,239,0.96))] p-8 text-center ring-1 ${currentStyles.ring} transition-all duration-500 md:p-12 ${currentStyles.glow}`}
-        >
-          <div className="mx-auto flex max-w-xl flex-col items-center gap-6">
-            <p className="text-xs uppercase tracking-[0.3em] text-black/40">
-              Session timer
-            </p>
-            <div className="space-y-3">
-              <p
-                className={`font-mono text-6xl font-semibold tracking-[-0.08em] transition-colors duration-500 sm:text-7xl md:text-8xl ${currentStyles.accent}`}
-              >
-                {formatTime(elapsedSeconds)}
-              </p>
-              <p className="text-sm text-black/55">
-                Smooth time tracking for live speeches, evaluations, and table topics.
-              </p>
-            </div>
+        <div className="grid grid-cols-3 gap-3">
+          <button
+            type="button"
+            onClick={handleStart}
+            disabled={isRunning}
+            className="inline-flex items-center justify-center rounded-full bg-black px-4 py-3 text-sm font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
+          >
+            Start
+          </button>
+          <button
+            type="button"
+            onClick={handlePause}
+            disabled={!isRunning}
+            className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/[0.03] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Pause
+          </button>
+          <button
+            type="button"
+            onClick={handleReset}
+            className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/[0.03]"
+          >
+            Reset
+          </button>
+        </div>
+      </div>
 
-            <div className="h-2 w-full overflow-hidden rounded-full bg-black/6">
-              <div
-                className={`h-full rounded-full bg-gradient-to-r ${currentStyles.progress} transition-[width,background] duration-500`}
-                style={{ width: progressWidth }}
-              />
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <button
-                type="button"
-                onClick={handleStart}
-                className="inline-flex min-w-32 items-center justify-center rounded-full bg-black px-5 py-3 text-sm font-semibold text-white transition-transform duration-200 hover:-translate-y-0.5"
-              >
-                {isRunning ? "Pause" : "Start"}
-              </button>
-              <button
-                type="button"
-                onClick={handleReset}
-                className="inline-flex min-w-32 items-center justify-center rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/[0.03]"
-              >
-                Reset
-              </button>
-            </div>
-          </div>
+      <div className="relative flex flex-wrap items-center justify-center gap-3 text-sm text-black/60">
+        <div className="rounded-full border border-black/8 bg-white/70 px-4 py-2">
+          Min {formatTime(minThreshold)}
+        </div>
+        <div className="rounded-full border border-black/8 bg-white/70 px-4 py-2">
+          Max {formatTime(maxThreshold)}
         </div>
       </div>
     </section>
