@@ -3,6 +3,7 @@ import type { Feedback, Speaker } from "@/types";
 type SessionSummaryProps = {
   speakers: Speaker[];
   feedbackBySpeaker: Map<string, Feedback[]>;
+  authorLabels: Record<string, string>;
 };
 
 function ScorePill({ label, value }: { label: string; value: number }) {
@@ -16,6 +17,7 @@ function ScorePill({ label, value }: { label: string; value: number }) {
 export function SessionSummary({
   speakers,
   feedbackBySpeaker,
+  authorLabels,
 }: SessionSummaryProps) {
   if (speakers.length === 0) {
     return (
@@ -74,7 +76,13 @@ export function SessionSummary({
                       />
                     </div>
 
-                    <p className="mt-3 text-sm leading-7 text-black/68">
+                    {entry.userId ? (
+                      <p className="mt-3 text-sm font-semibold text-black">
+                        {authorLabels[entry.userId] ?? "Participant feedback"}
+                      </p>
+                    ) : null}
+
+                    <p className="mt-2 text-sm leading-7 text-black/68">
                       {entry.comment || "No comment provided."}
                     </p>
                   </section>

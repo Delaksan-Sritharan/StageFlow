@@ -8,6 +8,7 @@ import type { SpeakerRole } from "@/types";
 
 export type SpeakerFormState = {
   errors?: {
+    sessionParticipantId?: string;
     name?: string;
     role?: string;
     minTime?: string;
@@ -115,6 +116,8 @@ export async function addSpeaker(
   void _prevState;
 
   const name = formData.get("name")?.toString().trim() ?? "";
+  const sessionParticipantId =
+    formData.get("sessionParticipantId")?.toString().trim() ?? "";
   const role = formData.get("role")?.toString().trim() ?? "";
   const minTimeValue = formData.get("minTime")?.toString().trim() ?? "";
   const maxTimeValue = formData.get("maxTime")?.toString().trim() ?? "";
@@ -123,6 +126,10 @@ export async function addSpeaker(
   const maxTime = parsePositiveInteger(maxTimeValue);
 
   const errors: SpeakerFormState["errors"] = {};
+
+  if (!sessionParticipantId) {
+    errors.sessionParticipantId = "Choose the participant who is being evaluated.";
+  }
 
   if (!name) {
     errors.name = "Speaker name is required.";
@@ -144,7 +151,13 @@ export async function addSpeaker(
     errors.maxTime = "Maximum time must be greater than or equal to minimum time.";
   }
 
-  if (errors.name || errors.role || errors.minTime || errors.maxTime) {
+  if (
+    errors.sessionParticipantId ||
+    errors.name ||
+    errors.role ||
+    errors.minTime ||
+    errors.maxTime
+  ) {
     return { errors };
   }
 
@@ -174,6 +187,7 @@ export async function addSpeaker(
 
   const { error } = await supabase.from("speakers").insert({
     session_id: sessionId,
+    session_participant_id: sessionParticipantId,
     name,
     role,
     min_time: minTime,
@@ -212,6 +226,8 @@ export async function submitFeedback(
   const confidenceScoreValue =
     formData.get("confidenceScore")?.toString().trim() ?? "";
   const comment = formData.get("comment")?.toString().trim() ?? "";
+  const sessionParticipantId =
+    formData.get("sessionParticipantId")?.toString().trim() ?? "";
 
   const contentScore = parseScore(contentScoreValue);
   const deliveryScore = parseScore(deliveryScoreValue);
@@ -235,6 +251,14 @@ export async function submitFeedback(
     return { errors };
   }
 
+  if (!sessionParticipantId) {
+    return {
+      errors: {
+        form: "This speaker is not linked to an accepted participant yet.",
+      },
+    };
+  }
+
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
   const {
@@ -251,6 +275,8 @@ export async function submitFeedback(
 
   const { error } = await supabase.from("feedback").insert({
     speaker_id: speakerId,
+    session_participant_id: sessionParticipantId,
+    user_id: user.id,
     content_score: contentScore,
     delivery_score: deliveryScore,
     confidence_score: confidenceScore,

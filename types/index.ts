@@ -20,6 +20,7 @@ export type SessionParticipant = {
 export type Speaker = {
   id: string;
   sessionId: string;
+  sessionParticipantId: string | null;
   name: string;
   role: SpeakerRole;
   minTime: number;
@@ -29,6 +30,8 @@ export type Speaker = {
 export type Feedback = {
   id: string;
   speakerId: string;
+  sessionParticipantId: string | null;
+  userId: string | null;
   contentScore: number;
   deliveryScore: number;
   confidenceScore: number;

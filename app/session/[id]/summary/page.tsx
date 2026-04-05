@@ -2,7 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 
 import { SessionSummary } from "@/components/SessionSummary";
-import type { Feedback, Speaker } from "@/types";
+import type { Feedback, SessionParticipant, Speaker } from "@/types";
 import { createClient } from "@/utils/supabase/server";
 
 type SessionSummaryPageProps = {
@@ -31,16 +31,32 @@ export default async function SessionSummaryPage({
   const { id } = await params;
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { data: session, error: sessionError } = await supabase
     .from("sessions")
-    .select("id, title, date")
+    .select("*")
     .eq("id", id)
     .single();
 
+  const sessionOwnerId = session
+    ? (session.creator_id ?? session.user_id ?? null)
+    : null;
+  const isCreator = sessionOwnerId === user?.id;
+
+  const { data: participantsData } = await supabase
+    .from("session_participants")
+    .select("*")
+    .eq("session_id", id)
+    .order("created_at", { ascending: true });
+
   const { data: speakersData, error: speakersError } = await supabase
     .from("speakers")
-    .select("id, session_id, name, role, min_time, max_time")
+    .select(
+      "id, session_id, session_participant_id, name, role, min_time, max_time",
+    )
     .eq("session_id", id)
     .order("created_at", { ascending: true });
 
@@ -50,7 +66,7 @@ export default async function SessionSummaryPage({
     ? await supabase
         .from("feedback")
         .select(
-          "id, speaker_id, content_score, delivery_score, confidence_score, comment, created_at",
+          "id, speaker_id, session_participant_id, user_id, content_score, delivery_score, confidence_score, comment, created_at",
         )
         .in("speaker_id", speakerIds)
         .order("created_at", { ascending: false })
@@ -65,11 +81,34 @@ export default async function SessionSummaryPage({
     speakersData?.map((speaker) => ({
       id: String(speaker.id),
       sessionId: String(speaker.session_id),
+      sessionParticipantId: speaker.session_participant_id
+        ? String(speaker.session_participant_id)
+        : null,
       name: speaker.name,
       role: speaker.role,
       minTime: speaker.min_time,
       maxTime: speaker.max_time,
     })) ?? [];
+
+  const participants: SessionParticipant[] =
+    participantsData?.map((participant) => ({
+      id: String(participant.id),
+      sessionId: String(participant.session_id),
+      userId: participant.user_id ? String(participant.user_id) : null,
+      invitedEmail: participant.invited_email ?? null,
+      role: participant.role ?? null,
+      accepted: participant.accepted ?? true,
+      inviteToken: participant.invite_token ?? null,
+    })) ?? [];
+
+  const authorLabels = Object.fromEntries(
+    participants
+      .filter((participant) => participant.userId)
+      .map((participant) => [
+        participant.userId as string,
+        participant.invitedEmail ?? participant.role ?? "Participant",
+      ]),
+  );
 
   const feedbackBySpeaker = new Map<string, Feedback[]>();
 
@@ -80,6 +119,10 @@ export default async function SessionSummaryPage({
     existing.push({
       id: String(entry.id),
       speakerId,
+      sessionParticipantId: entry.session_participant_id
+        ? String(entry.session_participant_id)
+        : null,
+      userId: entry.user_id ? String(entry.user_id) : null,
       contentScore: entry.content_score,
       deliveryScore: entry.delivery_score,
       confidenceScore: entry.confidence_score,
@@ -149,10 +192,15 @@ export default async function SessionSummaryPage({
         <section className="rounded-4xl border border-rose-200 bg-rose-50 p-8 text-sm text-rose-700 shadow-[0_24px_90px_rgba(15,23,42,0.04)]">
           Failed to load feedback: {feedbackError.message}
         </section>
+      ) : !isCreator ? (
+        <section className="rounded-4xl border border-rose-200 bg-rose-50 p-8 text-sm text-rose-700 shadow-[0_24px_90px_rgba(15,23,42,0.04)]">
+          Only the session creator can view the full feedback summary.
+        </section>
       ) : (
         <SessionSummary
           speakers={speakers}
           feedbackBySpeaker={feedbackBySpeaker}
+          authorLabels={authorLabels}
         />
       )}
     </main>

@@ -15,6 +15,7 @@ const initialState: FeedbackFormState = {
 type FeedbackFormProps = {
   sessionId: string;
   speakerId: string;
+  sessionParticipantId: string;
 };
 
 function SubmitButton() {
@@ -66,7 +67,11 @@ function ScoreField({
   );
 }
 
-export function FeedbackForm({ sessionId, speakerId }: FeedbackFormProps) {
+export function FeedbackForm({
+  sessionId,
+  speakerId,
+  sessionParticipantId,
+}: FeedbackFormProps) {
   const submitFeedbackForSpeaker = submitFeedback.bind(
     null,
     sessionId,
@@ -79,6 +84,12 @@ export function FeedbackForm({ sessionId, speakerId }: FeedbackFormProps) {
 
   return (
     <form action={formAction} className="space-y-5">
+      <input
+        type="hidden"
+        name="sessionParticipantId"
+        value={sessionParticipantId}
+      />
+
       <div className="grid gap-4 md:grid-cols-3">
         <ScoreField
           id={`contentScore-${speakerId}`}

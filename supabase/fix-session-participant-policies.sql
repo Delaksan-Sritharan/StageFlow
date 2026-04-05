@@ -26,6 +26,15 @@ add column if not exists accepted boolean default true;
 alter table if exists public.session_participants
 add column if not exists invite_token uuid default gen_random_uuid();
 
+alter table if exists public.speakers
+add column if not exists session_participant_id bigint references public.session_participants(id) on delete set null;
+
+alter table if exists public.feedback
+add column if not exists session_participant_id bigint references public.session_participants(id) on delete set null;
+
+alter table if exists public.feedback
+add column if not exists user_id uuid references public.users(id) on delete set null;
+
 update public.session_participants
 set accepted = true
 where accepted is null;
@@ -33,6 +42,12 @@ where accepted is null;
 update public.session_participants
 set invite_token = gen_random_uuid()
 where invite_token is null;
+
+update public.feedback
+set session_participant_id = public.speakers.session_participant_id
+from public.speakers
+where public.speakers.id = public.feedback.speaker_id
+  and public.feedback.session_participant_id is null;
 
 alter table if exists public.session_participants
 alter column accepted set default true;
@@ -59,6 +74,15 @@ where invited_email is not null;
 
 create unique index if not exists session_participants_invite_token_idx
 on public.session_participants (invite_token);
+
+create index if not exists speakers_session_participant_id_idx
+on public.speakers (session_participant_id);
+
+create index if not exists feedback_session_participant_id_idx
+on public.feedback (session_participant_id);
+
+create index if not exists feedback_user_id_idx
+on public.feedback (user_id);
 
 create or replace function public.is_session_creator(
   target_session_id bigint,

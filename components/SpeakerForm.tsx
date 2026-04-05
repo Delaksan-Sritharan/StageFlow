@@ -14,6 +14,11 @@ const speakerRoles: SpeakerRole[] = ["Speaker", "Evaluator", "Table Topics"];
 
 type SpeakerFormProps = {
   sessionId: string;
+  participants: Array<{
+    id: string;
+    label: string;
+    role: SpeakerRole | null;
+  }>;
 };
 
 function SubmitButton() {
@@ -30,7 +35,7 @@ function SubmitButton() {
   );
 }
 
-export function SpeakerForm({ sessionId }: SpeakerFormProps) {
+export function SpeakerForm({ sessionId, participants }: SpeakerFormProps) {
   const addSpeakerForSession = addSpeaker.bind(null, sessionId);
   const [state, formAction] = useActionState(
     addSpeakerForSession,
@@ -40,6 +45,37 @@ export function SpeakerForm({ sessionId }: SpeakerFormProps) {
   return (
     <form action={formAction} className="space-y-5">
       <div className="grid gap-5 md:grid-cols-2">
+        <div className="space-y-2 md:col-span-2">
+          <label
+            htmlFor="sessionParticipantId"
+            className="text-sm font-semibold tracking-[-0.01em] text-black"
+          >
+            Evaluated participant
+          </label>
+          <select
+            id="sessionParticipantId"
+            name="sessionParticipantId"
+            required
+            defaultValue=""
+            className="w-full rounded-3xl border border-black/10 bg-white px-4 py-3 text-base text-black outline-none transition-colors duration-200 focus:border-black/30"
+          >
+            <option value="" disabled>
+              Select accepted participant
+            </option>
+            {participants.map((participant) => (
+              <option key={participant.id} value={participant.id}>
+                {participant.label}
+                {participant.role ? ` • ${participant.role}` : ""}
+              </option>
+            ))}
+          </select>
+          {state.errors?.sessionParticipantId ? (
+            <p className="text-sm text-rose-600">
+              {state.errors.sessionParticipantId}
+            </p>
+          ) : null}
+        </div>
+
         <div className="space-y-2 md:col-span-2">
           <label
             htmlFor="name"

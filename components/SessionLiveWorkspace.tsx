@@ -12,6 +12,8 @@ type SessionLiveWorkspaceProps = {
   isCreator: boolean;
   viewerRole: SpeakerRole | null;
   speakers: Speaker[];
+  participantLabels: Record<string, string>;
+  authorLabels: Record<string, string>;
   feedbackBySpeaker: Record<string, Feedback[]>;
 };
 
@@ -29,6 +31,8 @@ export function SessionLiveWorkspace({
   isCreator,
   viewerRole,
   speakers,
+  participantLabels,
+  authorLabels,
   feedbackBySpeaker,
 }: SessionLiveWorkspaceProps) {
   const initialFinishedSpeakerIds = useMemo(
@@ -193,14 +197,28 @@ export function SessionLiveWorkspace({
                     <FeedbackForm
                       sessionId={sessionId}
                       speakerId={speaker.id}
+                      sessionParticipantId={speaker.sessionParticipantId ?? ""}
                     />
                   </div>
                   <div className="space-y-3">
                     <p className="text-sm font-semibold tracking-[-0.01em] text-black">
                       Submitted feedback
                     </p>
+                    {speaker.sessionParticipantId ? (
+                      <p className="text-sm text-black/58">
+                        Evaluating{" "}
+                        {participantLabels[speaker.sessionParticipantId] ??
+                          "linked participant"}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-rose-600">
+                        Link this speaker to an accepted participant before
+                        feedback can be attributed correctly.
+                      </p>
+                    )}
                     <FeedbackList
                       feedback={feedbackBySpeaker[speaker.id] ?? []}
+                      authorLabels={authorLabels}
                     />
                   </div>
                 </div>

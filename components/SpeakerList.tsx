@@ -11,9 +11,10 @@ function formatTime(totalSeconds: number) {
 
 type SpeakerListProps = {
   speakers: Speaker[];
+  participantLabels?: Record<string, string>;
 };
 
-export function SpeakerList({ speakers }: SpeakerListProps) {
+export function SpeakerList({ speakers, participantLabels }: SpeakerListProps) {
   if (speakers.length === 0) {
     return (
       <p className="rounded-4xl border border-black/8 bg-white/80 px-5 py-4 text-sm text-black/65 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
@@ -35,6 +36,12 @@ export function SpeakerList({ speakers }: SpeakerListProps) {
                 {speaker.name}
               </p>
               <p className="mt-1 text-sm text-black/58">{speaker.role}</p>
+              {speaker.sessionParticipantId ? (
+                <p className="mt-1 text-sm text-black/48">
+                  {participantLabels?.[speaker.sessionParticipantId] ??
+                    "Linked participant"}
+                </p>
+              ) : null}
             </div>
 
             <div className="flex flex-wrap gap-3 text-sm text-black/65">

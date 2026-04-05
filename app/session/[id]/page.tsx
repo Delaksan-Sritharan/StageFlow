@@ -10,6 +10,17 @@ import { SessionInvitationsList } from "@/components/SessionInvitationsList";
 import type { Feedback, SessionParticipant, Speaker } from "@/types";
 import { createClient } from "@/utils/supabase/server";
 
+function getParticipantLabel(
+  participant: SessionParticipant,
+  creatorId: string | null,
+) {
+  if (participant.userId && participant.userId === creatorId) {
+    return "Session creator";
+  }
+
+  return participant.invitedEmail ?? participant.role ?? "Participant";
+}
+
 type SessionDetailPageProps = {
   params: Promise<{
     id: string;
@@ -112,13 +123,15 @@ export default async function SessionDetailPage({
     .order("created_at", { ascending: true });
   const { data: speakersData, error: speakersError } = await supabase
     .from("speakers")
-    .select("id, session_id, name, role, min_time, max_time")
+    .select(
+      "id, session_id, session_participant_id, name, role, min_time, max_time",
+    )
     .eq("session_id", id)
     .order("created_at", { ascending: true });
   const { data: feedbackData, error: feedbackError } = await supabase
     .from("feedback")
     .select(
-      "id, speaker_id, content_score, delivery_score, confidence_score, comment, created_at",
+      "id, speaker_id, session_participant_id, user_id, content_score, delivery_score, confidence_score, comment, created_at",
     )
     .order("created_at", { ascending: false });
 
@@ -172,6 +185,23 @@ export default async function SessionDetailPage({
           ...acceptedParticipantsBase,
         ]
       : acceptedParticipantsBase;
+  const acceptedParticipantsForSpeakerSelection = acceptedParticipants.filter(
+    (participant) => participant.accepted,
+  );
+  const participantLabels = Object.fromEntries(
+    acceptedParticipants.map((participant) => [
+      participant.id,
+      getParticipantLabel(participant, sessionOwnerId),
+    ]),
+  );
+  const authorLabels = Object.fromEntries(
+    acceptedParticipants
+      .filter((participant) => participant.userId)
+      .map((participant) => [
+        participant.userId as string,
+        getParticipantLabel(participant, sessionOwnerId),
+      ]),
+  );
   const viewerParticipant = acceptedParticipants.find(
     (participant) => participant.userId === user?.id,
   );
@@ -181,6 +211,9 @@ export default async function SessionDetailPage({
     speakersData?.map((speaker) => ({
       id: String(speaker.id),
       sessionId: String(speaker.session_id),
+      sessionParticipantId: speaker.session_participant_id
+        ? String(speaker.session_participant_id)
+        : null,
       name: speaker.name,
       role: speaker.role,
       minTime: speaker.min_time,
@@ -195,6 +228,10 @@ export default async function SessionDetailPage({
     speakerFeedback.push({
       id: String(entry.id),
       speakerId,
+      sessionParticipantId: entry.session_participant_id
+        ? String(entry.session_participant_id)
+        : null,
+      userId: entry.user_id ? String(entry.user_id) : null,
       contentScore: entry.content_score,
       deliveryScore: entry.delivery_score,
       confidenceScore: entry.confidence_score,
@@ -335,6 +372,8 @@ export default async function SessionDetailPage({
                     isCreator={isCreator}
                     viewerRole={viewerRole}
                     speakers={speakers}
+                    participantLabels={participantLabels}
+                    authorLabels={authorLabels}
                     feedbackBySpeaker={serializedFeedbackBySpeaker}
                   />
                 )}
@@ -429,7 +468,19 @@ export default async function SessionDetailPage({
                         Failed to load speakers: {speakersError.message}
                       </p>
                     ) : (
-                      <SpeakerForm sessionId={id} />
+                      <SpeakerForm
+                        sessionId={id}
+                        participants={acceptedParticipantsForSpeakerSelection.map(
+                          (participant) => ({
+                            id: participant.id,
+                            label: getParticipantLabel(
+                              participant,
+                              sessionOwnerId,
+                            ),
+                            role: participant.role,
+                          }),
+                        )}
+                      />
                     )}
                   </div>
                 </section>
@@ -454,7 +505,10 @@ export default async function SessionDetailPage({
                       Failed to load speakers: {speakersError.message}
                     </p>
                   ) : (
-                    <SpeakerList speakers={speakers} />
+                    <SpeakerList
+                      speakers={speakers}
+                      participantLabels={participantLabels}
+                    />
                   )}
                 </section>
               </section>
