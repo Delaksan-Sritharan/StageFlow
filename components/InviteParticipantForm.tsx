@@ -34,7 +34,7 @@ function SubmitButton({
       name="inviteMode"
       value={mode}
       disabled={pending}
-      className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3 disabled:cursor-not-allowed disabled:opacity-45"
+      className="inline-flex w-full items-center justify-center rounded-full border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
     >
       {pending ? "Saving..." : label}
     </button>

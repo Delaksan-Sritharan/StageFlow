@@ -141,6 +141,13 @@ export function SessionLiveWorkspace({
             className="max-w-none"
           />
 
+          {!canControlTimer ? (
+            <p className="rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              Timer controls are limited to the session creator and accepted
+              participants with the Speaker role.
+            </p>
+          ) : null}
+
           <div className="flex justify-end">
             <button
               type="button"
@@ -194,11 +201,19 @@ export function SessionLiveWorkspace({
 
                 <div className="mt-5 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
                   <div>
-                    <FeedbackForm
-                      sessionId={sessionId}
-                      speakerId={speaker.id}
-                      sessionParticipantId={speaker.sessionParticipantId ?? ""}
-                    />
+                    {speaker.sessionParticipantId ? (
+                      <FeedbackForm
+                        sessionId={sessionId}
+                        speakerId={speaker.id}
+                        sessionParticipantId={speaker.sessionParticipantId}
+                      />
+                    ) : (
+                      <div className="rounded-3xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-7 text-amber-950">
+                        This speaker is not linked to an accepted participant
+                        yet, so feedback submission is disabled until the
+                        session creator fixes that mapping.
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-3">
                     <p className="text-sm font-semibold tracking-[-0.01em] text-black">

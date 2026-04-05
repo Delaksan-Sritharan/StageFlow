@@ -46,7 +46,7 @@ export default async function SessionSummaryPage({
     : null;
   const isCreator = sessionOwnerId === user?.id;
 
-  const { data: participantsData } = await supabase
+  const { data: participantsData, error: participantsError } = await supabase
     .from("session_participants")
     .select("*")
     .eq("session_id", id)
@@ -74,6 +74,7 @@ export default async function SessionSummaryPage({
 
   const showSetupState =
     isMissingTable(sessionError, "sessions") ||
+    isMissingTable(participantsError, "session_participants") ||
     isMissingTable(speakersError, "speakers") ||
     isMissingTable(feedbackError, "feedback");
 
@@ -191,6 +192,14 @@ export default async function SessionSummaryPage({
       ) : feedbackError ? (
         <section className="rounded-4xl border border-rose-200 bg-rose-50 p-8 text-sm text-rose-700 shadow-[0_24px_90px_rgba(15,23,42,0.04)]">
           Failed to load feedback: {feedbackError.message}
+        </section>
+      ) : participantsError ? (
+        <section className="rounded-4xl border border-rose-200 bg-rose-50 p-8 text-sm text-rose-700 shadow-[0_24px_90px_rgba(15,23,42,0.04)]">
+          Failed to load participants: {participantsError.message}
+        </section>
+      ) : !session ? (
+        <section className="rounded-4xl border border-black/8 bg-white/84 p-8 text-sm text-black/65 shadow-[0_24px_90px_rgba(15,23,42,0.06)] backdrop-blur">
+          Session not found or you do not have access.
         </section>
       ) : !isCreator ? (
         <section className="rounded-4xl border border-rose-200 bg-rose-50 p-8 text-sm text-rose-700 shadow-[0_24px_90px_rgba(15,23,42,0.04)]">

@@ -108,6 +108,42 @@ async function userOwnsSession(supabase: ReturnType<typeof createClient>, sessio
   return Boolean(ownedSession);
 }
 
+async function userCanAccessSession(
+  supabase: ReturnType<typeof createClient>,
+  sessionId: string,
+  userId: string,
+) {
+  if (await userOwnsSession(supabase, sessionId, userId)) {
+    return true;
+  }
+
+  const { data } = await supabase
+    .from("session_participants")
+    .select("id")
+    .eq("session_id", sessionId)
+    .eq("user_id", userId)
+    .eq("accepted", true)
+    .maybeSingle();
+
+  return Boolean(data);
+}
+
+async function getAcceptedSessionParticipant(
+  supabase: ReturnType<typeof createClient>,
+  sessionId: string,
+  sessionParticipantId: string,
+) {
+  const { data, error } = await supabase
+    .from("session_participants")
+    .select("id")
+    .eq("id", sessionParticipantId)
+    .eq("session_id", sessionId)
+    .eq("accepted", true)
+    .maybeSingle();
+
+  return { data, error };
+}
+
 export async function addSpeaker(
   sessionId: string,
   _prevState: SpeakerFormState = initialState,
@@ -181,6 +217,20 @@ export async function addSpeaker(
     return {
       errors: {
         form: "Only the session creator can add speakers.",
+      },
+    };
+  }
+
+  const participantLookup = await getAcceptedSessionParticipant(
+    supabase,
+    sessionId,
+    sessionParticipantId,
+  );
+
+  if (!participantLookup.data) {
+    return {
+      errors: {
+        form: "Choose an accepted participant from this session.",
       },
     };
   }
@@ -269,6 +319,55 @@ export async function submitFeedback(
     return {
       errors: {
         form: "You must be logged in to submit feedback.",
+      },
+    };
+  }
+
+  const canAccessSession = await userCanAccessSession(supabase, sessionId, user.id);
+
+  if (!canAccessSession) {
+    return {
+      errors: {
+        form: "Only accepted participants or the session creator can submit feedback.",
+      },
+    };
+  }
+
+  const { data: speaker, error: speakerError } = await supabase
+    .from("speakers")
+    .select("id, session_id, session_participant_id")
+    .eq("id", speakerId)
+    .eq("session_id", sessionId)
+    .maybeSingle();
+
+  if (speakerError) {
+    return {
+      errors: {
+        form: `Failed to validate speaker: ${speakerError.message}`,
+      },
+    };
+  }
+
+  if (!speaker) {
+    return {
+      errors: {
+        form: "This speaker could not be found for the current session.",
+      },
+    };
+  }
+
+  if (!speaker.session_participant_id) {
+    return {
+      errors: {
+        form: "This speaker must be linked to an accepted participant before feedback can be saved.",
+      },
+    };
+  }
+
+  if (String(speaker.session_participant_id) !== sessionParticipantId) {
+    return {
+      errors: {
+        form: "Feedback must target the participant linked to this speaker.",
       },
     };
   }

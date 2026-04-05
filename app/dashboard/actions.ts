@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { createClient } from "@/utils/supabase/server";
 
@@ -26,6 +27,30 @@ export async function deleteSession(formData: FormData) {
     return;
   }
 
+  const creatorLookup = await supabase
+    .from("sessions")
+    .select("id")
+    .eq("id", sessionId)
+    .eq("creator_id", user.id)
+    .maybeSingle();
+
+  let ownsSession = Boolean(creatorLookup.data);
+
+  if (isMissingCreatorIdColumn(creatorLookup.error)) {
+    const fallbackLookup = await supabase
+      .from("sessions")
+      .select("id")
+      .eq("id", sessionId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    ownsSession = Boolean(fallbackLookup.data);
+  }
+
+  if (!ownsSession) {
+    return;
+  }
+
   const { error } = await supabase
     .from("sessions")
     .delete()
@@ -41,4 +66,7 @@ export async function deleteSession(formData: FormData) {
   }
 
   revalidatePath("/");
+  revalidatePath(`/session/${sessionId}`);
+  revalidatePath(`/session/${sessionId}/summary`);
+  redirect("/");
 }

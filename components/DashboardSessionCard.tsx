@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { deleteSession } from "@/app/dashboard/actions";
+import { DeleteSessionButton } from "@/components/DeleteSessionButton";
 
 type DashboardSessionCardProps = {
   session: {
@@ -46,26 +46,23 @@ export function DashboardSessionCard({
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         <Link
           href={`/session/${session.id}`}
-          className="inline-flex items-center justify-center rounded-full bg-black px-4 py-2.5 text-sm font-semibold text-white transition-transform duration-200 hover:-translate-y-0.5"
+          className="inline-flex w-full items-center justify-center rounded-full bg-black px-4 py-2.5 text-sm font-semibold text-white transition-transform duration-200 hover:-translate-y-0.5 sm:w-auto"
         >
           Open session
         </Link>
-        <Link
-          href={`/session/${session.id}/summary`}
-          className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3"
-        >
-          View summary
-        </Link>
         {isCreator ? (
-          <form action={deleteSession}>
-            <input type="hidden" name="sessionId" value={session.id} />
-            <button
-              type="submit"
-              className="inline-flex items-center justify-center rounded-full border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 transition-colors duration-200 hover:bg-rose-100"
-            >
-              Delete session
-            </button>
-          </form>
+          <Link
+            href={`/session/${session.id}/summary`}
+            className="inline-flex w-full items-center justify-center rounded-full border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3 sm:w-auto"
+          >
+            View summary
+          </Link>
+        ) : null}
+        {isCreator ? (
+          <DeleteSessionButton
+            sessionId={session.id}
+            className="inline-flex w-full items-center justify-center rounded-full border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 transition-colors duration-200 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
+          />
         ) : null}
       </div>
     </article>

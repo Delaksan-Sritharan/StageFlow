@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 
+import { DeleteSessionButton } from "@/components/DeleteSessionButton";
 import { InviteParticipantForm } from "@/components/InviteParticipantForm";
 import { SessionLiveWorkspace } from "@/components/SessionLiveWorkspace";
 import { SpeakerForm } from "@/components/SpeakerForm";
@@ -128,12 +129,16 @@ export default async function SessionDetailPage({
     )
     .eq("session_id", id)
     .order("created_at", { ascending: true });
-  const { data: feedbackData, error: feedbackError } = await supabase
-    .from("feedback")
-    .select(
-      "id, speaker_id, session_participant_id, user_id, content_score, delivery_score, confidence_score, comment, created_at",
-    )
-    .order("created_at", { ascending: false });
+  const speakerIds = speakersData?.map((speaker) => speaker.id) ?? [];
+  const { data: feedbackData, error: feedbackError } = speakerIds.length
+    ? await supabase
+        .from("feedback")
+        .select(
+          "id, speaker_id, session_participant_id, user_id, content_score, delivery_score, confidence_score, comment, created_at",
+        )
+        .in("speaker_id", speakerIds)
+        .order("created_at", { ascending: false })
+    : { data: [], error: null };
 
   const showSetupState =
     isMissingSessionsTable(error) || isBrokenParticipantsPolicy(error);
@@ -185,7 +190,7 @@ export default async function SessionDetailPage({
           ...acceptedParticipantsBase,
         ]
       : acceptedParticipantsBase;
-  const acceptedParticipantsForSpeakerSelection = acceptedParticipants.filter(
+  const acceptedParticipantsForSpeakerSelection = participants.filter(
     (participant) => participant.accepted,
   );
   const participantLabels = Object.fromEntries(
@@ -263,18 +268,28 @@ export default async function SessionDetailPage({
             </h1>
           </div>
 
-          <Link
-            href="/session/create"
-            className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3"
-          >
-            Create another session
-          </Link>
-          <Link
-            href={`/session/${id}/summary`}
-            className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3"
-          >
-            Open summary
-          </Link>
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
+            <Link
+              href="/session/create"
+              className="inline-flex w-full items-center justify-center rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3 sm:w-auto"
+            >
+              Create another session
+            </Link>
+            {isCreator ? (
+              <>
+                <Link
+                  href={`/session/${id}/summary`}
+                  className="inline-flex w-full items-center justify-center rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3 sm:w-auto"
+                >
+                  Open summary
+                </Link>
+                <DeleteSessionButton
+                  sessionId={id}
+                  className="inline-flex w-full items-center justify-center rounded-full border border-rose-200 bg-rose-50 px-5 py-3 text-sm font-semibold text-rose-700 transition-colors duration-200 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
+                />
+              </>
+            ) : null}
+          </div>
         </div>
       </section>
 

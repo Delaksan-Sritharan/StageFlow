@@ -164,6 +164,44 @@ as $$
   limit 1;
 $$;
 
+create or replace function public.get_my_pending_invitations()
+returns table (
+  participant_id bigint,
+  session_id bigint,
+  session_title text,
+  session_date date,
+  assigned_role text,
+  invite_token uuid,
+  invited_email text
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select
+    public.session_participants.id,
+    public.session_participants.session_id,
+    public.sessions.title,
+    public.sessions.date,
+    public.session_participants.role,
+    public.session_participants.invite_token,
+    public.session_participants.invited_email
+  from public.session_participants
+  join public.sessions on public.sessions.id = public.session_participants.session_id
+  left join public.users on public.users.id = auth.uid()
+  where coalesce(public.session_participants.accepted, false) = false
+    and (
+      public.session_participants.user_id = auth.uid()
+      or (
+        public.session_participants.invited_email is not null
+        and lower(public.session_participants.invited_email) = lower(
+          coalesce(public.users.email, auth.jwt() ->> 'email', '')
+        )
+      )
+    )
+  order by public.sessions.date asc, public.session_participants.created_at asc;
+$$;
+
 create or replace function public.accept_session_invitation(
   target_invite_token uuid,
   selected_role text default null
@@ -244,6 +282,7 @@ end;
 $$;
 
 grant execute on function public.get_session_invitation(uuid) to anon, authenticated;
+grant execute on function public.get_my_pending_invitations() to authenticated;
 grant execute on function public.accept_session_invitation(uuid, text) to authenticated;
 
 do $$
@@ -348,7 +387,16 @@ create policy "Users can insert own speakers"
 on public.speakers
 for insert
 to authenticated
-with check (public.is_session_creator(public.speakers.session_id));
+with check (
+  public.is_session_creator(public.speakers.session_id)
+  and exists (
+    select 1
+    from public.session_participants
+    where public.session_participants.id = public.speakers.session_participant_id
+      and public.session_participants.session_id = public.speakers.session_id
+      and coalesce(public.session_participants.accepted, true) = true
+  )
+);
 
 drop policy if exists "Users can update own speakers" on public.speakers;
 create policy "Users can update own speakers"
@@ -385,10 +433,22 @@ on public.feedback
 for insert
 to authenticated
 with check (
+  public.feedback.user_id = auth.uid()
+  and exists (
+    select 1
+    from public.session_participants
+    where public.session_participants.id = public.feedback.session_participant_id
+      and coalesce(public.session_participants.accepted, true) = true
+  )
+  and
   exists (
     select 1
     from public.speakers
+    join public.session_participants
+      on public.session_participants.id = public.feedback.session_participant_id
     where public.speakers.id = public.feedback.speaker_id
+      and public.speakers.session_participant_id = public.feedback.session_participant_id
+      and public.session_participants.session_id = public.speakers.session_id
       and public.can_access_session(public.speakers.session_id)
   )
 );

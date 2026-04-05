@@ -2,8 +2,19 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 
 import { DashboardSessionCard } from "@/components/DashboardSessionCard";
+import { PendingInvitationsNotice } from "@/components/PendingInvitationsNotice";
 import { Timer } from "@/components/Timer";
 import { createClient } from "@/utils/supabase/server";
+
+type PendingInvitationRow = {
+  participant_id: number;
+  session_id: number;
+  session_title: string;
+  session_date: string;
+  assigned_role: "Speaker" | "Evaluator" | "Table Topics" | null;
+  invite_token: string;
+  invited_email: string | null;
+};
 
 function getSessionOwnerId(session: {
   creator_id?: string | null;
@@ -48,6 +59,19 @@ function isBrokenParticipantsPolicy(error: { message?: string } | null) {
   );
 }
 
+function isMissingPendingInvitesRpc(
+  error: { code?: string; message?: string } | null,
+) {
+  if (!error) {
+    return false;
+  }
+
+  return (
+    error.code === "PGRST202" ||
+    error.message?.includes("get_my_pending_invitations")
+  );
+}
+
 export default async function Page() {
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
@@ -67,6 +91,9 @@ export default async function Page() {
         .select("*")
         .in("session_id", sessionIds)
     : { data: [], error: null };
+  const { data: pendingInvitationsData, error: pendingInvitationsError } = user
+    ? await supabase.rpc("get_my_pending_invitations")
+    : { data: [], error: null };
 
   const showSetupState =
     isMissingSessionsTable(error) || isBrokenParticipantsPolicy(error);
@@ -75,6 +102,18 @@ export default async function Page() {
     isBrokenParticipantsPolicy(participantsError);
 
   const participantCountBySession = new Map<string, number>();
+  const pendingInvitations =
+    (pendingInvitationsData as PendingInvitationRow[] | null)?.map(
+      (invitation) => ({
+        participantId: String(invitation.participant_id),
+        sessionId: String(invitation.session_id),
+        sessionTitle: invitation.session_title,
+        sessionDate: invitation.session_date,
+        assignedRole: invitation.assigned_role,
+        inviteToken: String(invitation.invite_token),
+        invitedEmail: invitation.invited_email ?? null,
+      }),
+    ) ?? [];
 
   participantRows?.forEach((row) => {
     if (row.accepted === false) {
@@ -131,6 +170,10 @@ export default async function Page() {
           </div>
         </div>
       </section>
+
+      {!isMissingPendingInvitesRpc(pendingInvitationsError) ? (
+        <PendingInvitationsNotice invitations={pendingInvitations} />
+      ) : null}
 
       <section className="rounded-4xl border border-black/8 bg-white/84 p-6 shadow-[0_24px_90px_rgba(15,23,42,0.06)] backdrop-blur md:p-8">
         <div className="flex flex-col gap-3 border-b border-black/8 pb-5 md:flex-row md:items-end md:justify-between">
