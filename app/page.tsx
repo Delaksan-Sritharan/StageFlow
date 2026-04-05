@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 
+import { DashboardSessionCard } from "@/components/DashboardSessionCard";
 import { Timer } from "@/components/Timer";
 import { createClient } from "@/utils/supabase/server";
 
@@ -17,14 +18,51 @@ function isMissingSessionsTable(
   );
 }
 
+function isMissingParticipantsTable(
+  error: { code?: string; message?: string } | null,
+) {
+  if (!error) {
+    return false;
+  }
+
+  return (
+    error.code === "PGRST205" ||
+    error.message?.includes(
+      "Could not find the table 'public.session_participants'",
+    )
+  );
+}
+
 export default async function Page() {
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const { data: sessions, error } = await supabase
     .from("sessions")
-    .select("id, title, date")
+    .select("id, title, date, user_id")
     .order("date", { ascending: true });
+  const sessionIds = sessions?.map((session) => session.id) ?? [];
+  const { data: participantRows, error: participantsError } = sessionIds.length
+    ? await supabase
+        .from("session_participants")
+        .select("session_id, user_id")
+        .in("session_id", sessionIds)
+    : { data: [], error: null };
   const showSetupState = isMissingSessionsTable(error);
+  const showParticipantsSetupState =
+    isMissingParticipantsTable(participantsError);
+
+  const participantCountBySession = new Map<string, number>();
+
+  participantRows?.forEach((row) => {
+    const sessionId = String(row.session_id);
+    participantCountBySession.set(
+      sessionId,
+      (participantCountBySession.get(sessionId) ?? 0) + 1,
+    );
+  });
 
   return (
     <main className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-7xl flex-col gap-8 px-6 py-8 md:px-10 md:py-10">
@@ -33,14 +71,18 @@ export default async function Page() {
           <div className="space-y-6">
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-black/45">
-                StageFlow / Overview
+                StageFlow / Dashboard
               </p>
               <h1 className="max-w-4xl text-5xl font-semibold tracking-[-0.07em] text-black md:text-6xl">
-                Run live speaking sessions with a calmer workflow.
+                Welcome back
+                {user?.user_metadata?.display_name
+                  ? `, ${user.user_metadata.display_name}`
+                  : ""}
+                .
               </h1>
               <p className="max-w-2xl text-base leading-8 text-black/65 md:text-lg">
-                Create sessions, manage speakers, collect feedback, and keep
-                timing visible without losing the room.
+                Review sessions you created or joined, manage speakers, collect
+                feedback, and keep live timing visible without losing the room.
               </p>
             </div>
 
@@ -73,7 +115,7 @@ export default async function Page() {
               Sessions
             </p>
             <h2 className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-black">
-              Upcoming and active sessions
+              Your session workspace
             </h2>
           </div>
           <p className="text-sm text-black/55">
@@ -82,11 +124,11 @@ export default async function Page() {
           </p>
         </div>
 
-        {showSetupState ? (
+        {showSetupState || showParticipantsSetupState ? (
           <section className="mt-6 space-y-4 rounded-3xl border border-amber-200 bg-amber-50 px-5 py-5 text-sm text-amber-950">
             <div className="space-y-2">
               <h3 className="text-lg font-semibold text-black">
-                The sessions table is not set up yet.
+                The dashboard tables are not set up yet.
               </h3>
               <p className="leading-7 text-black/70">
                 Run the checked-in schema in supabase/sessions.sql, then refresh
@@ -98,44 +140,26 @@ export default async function Page() {
           <p className="mt-6 rounded-3xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700">
             Failed to load sessions: {error.message}
           </p>
+        ) : participantsError ? (
+          <p className="mt-6 rounded-3xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700">
+            Failed to load participants: {participantsError.message}
+          </p>
         ) : sessions && sessions.length > 0 ? (
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {sessions.map((session) => (
-              <article
+              <DashboardSessionCard
                 key={session.id}
-                className="rounded-4xl border border-black/8 bg-white/88 p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)]"
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-black/42">
-                  Session
-                </p>
-                <h3 className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-black">
-                  {session.title}
-                </h3>
-                <p className="mt-2 text-sm text-black/62">
-                  {new Date(`${session.date}T00:00:00`).toLocaleDateString(
-                    "en-US",
-                    {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    },
-                  )}
-                </p>
-                <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                  <Link
-                    href={`/session/${session.id}`}
-                    className="inline-flex items-center justify-center rounded-full bg-black px-4 py-2.5 text-sm font-semibold text-white transition-transform duration-200 hover:-translate-y-0.5"
-                  >
-                    Open session
-                  </Link>
-                  <Link
-                    href={`/session/${session.id}/summary`}
-                    className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3"
-                  >
-                    View summary
-                  </Link>
-                </div>
-              </article>
+                session={{
+                  id: String(session.id),
+                  title: session.title,
+                  date: session.date,
+                  userId: session.user_id,
+                }}
+                participantCount={
+                  participantCountBySession.get(String(session.id)) ?? 1
+                }
+                isCreator={session.user_id === user?.id}
+              />
             ))}
           </div>
         ) : (
