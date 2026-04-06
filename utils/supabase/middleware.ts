@@ -1,8 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+import {
+  isSupabaseConfigured,
+  supabaseKey,
+  supabaseUrl,
+} from "@/utils/supabase/config";
 
 export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
@@ -11,6 +14,14 @@ export async function updateSession(request: NextRequest) {
   const isInviteRoute = pathname.startsWith("/invite/");
   const isHomeRoute = pathname === "/";
   const isPublicRoute = isAuthRoute || isInviteRoute || isHomeRoute;
+
+  if (!isSupabaseConfigured()) {
+    return NextResponse.next({
+      request: {
+        headers: request.headers,
+      },
+    });
+  }
 
   let supabaseResponse = NextResponse.next({
     request: {

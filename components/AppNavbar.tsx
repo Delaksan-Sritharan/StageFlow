@@ -3,6 +3,7 @@ import Image from "next/image";
 import { cookies } from "next/headers";
 
 import { logout } from "@/app/auth/actions";
+import { isSupabaseConfigured } from "@/utils/supabase/config";
 import { createClient } from "@/utils/supabase/server";
 
 const navLinks = [
@@ -12,11 +13,20 @@ const navLinks = [
 ];
 
 export async function AppNavbar() {
-  const cookieStore = await cookies();
-  const supabase = createClient(cookieStore);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let user: {
+    email?: string;
+    user_metadata?: { display_name?: string };
+  } | null = null;
+
+  if (isSupabaseConfigured()) {
+    const cookieStore = await cookies();
+    const supabase = createClient(cookieStore);
+    const {
+      data: { user: authUser },
+    } = await supabase.auth.getUser();
+
+    user = authUser;
+  }
 
   const displayName =
     user?.user_metadata?.display_name ||

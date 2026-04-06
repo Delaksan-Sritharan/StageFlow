@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 
 import { DashboardHome } from "@/components/DashboardHome";
 import { LandingPage } from "@/components/LandingPage";
+import { isSupabaseConfigured } from "@/utils/supabase/config";
 import { createClient } from "@/utils/supabase/server";
 
 type PendingInvitationRow = {
@@ -71,6 +72,10 @@ function isMissingPendingInvitesRpc(
 }
 
 export default async function Page() {
+  if (!isSupabaseConfigured()) {
+    return <LandingPage />;
+  }
+
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
   const {
