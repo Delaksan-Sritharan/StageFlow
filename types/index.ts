@@ -1,10 +1,13 @@
 export type SpeakerRole = "Speaker" | "Evaluator";
 
+export type EvaluationMode = "open" | "assigned";
+
 export type Session = {
   id: string;
   creatorId?: string | null;
   title: string;
   date: string;
+  evaluationMode?: EvaluationMode;
 };
 
 export type SessionParticipant = {
@@ -21,6 +24,7 @@ export type Speaker = {
   id: string;
   sessionId: string;
   sessionParticipantId: string | null;
+  assignedEvaluatorParticipantId: string | null;
   name: string;
   role: SpeakerRole;
   minTime: number;

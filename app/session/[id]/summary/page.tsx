@@ -85,6 +85,7 @@ export default async function SessionSummaryPage({
       sessionParticipantId: speaker.session_participant_id
         ? String(speaker.session_participant_id)
         : null,
+      assignedEvaluatorParticipantId: null,
       name: speaker.name,
       role: speaker.role,
       minTime: speaker.min_time,

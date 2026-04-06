@@ -14,10 +14,15 @@ const speakerRoles: SpeakerRole[] = ["Speaker", "Evaluator"];
 
 type SpeakerFormProps = {
   sessionId: string;
+  evaluationMode: "open" | "assigned";
   participants: Array<{
     id: string;
     label: string;
     role: SpeakerRole | null;
+  }>;
+  evaluatorParticipants: Array<{
+    id: string;
+    label: string;
   }>;
 };
 
@@ -35,7 +40,12 @@ function SubmitButton() {
   );
 }
 
-export function SpeakerForm({ sessionId, participants }: SpeakerFormProps) {
+export function SpeakerForm({
+  sessionId,
+  evaluationMode,
+  participants,
+  evaluatorParticipants,
+}: SpeakerFormProps) {
   const addSpeakerForSession = addSpeaker.bind(null, sessionId);
   const [state, formAction] = useActionState(
     addSpeakerForSession,
@@ -164,6 +174,38 @@ export function SpeakerForm({ sessionId, participants }: SpeakerFormProps) {
             <p className="text-sm text-rose-600">{state.errors.maxTime}</p>
           ) : null}
         </div>
+
+        {evaluationMode === "assigned" ? (
+          <div className="space-y-2 md:col-span-2">
+            <label
+              htmlFor="assignedEvaluatorParticipantId"
+              className="text-sm font-semibold tracking-[-0.01em] text-black"
+            >
+              Assigned evaluator
+            </label>
+            <select
+              id="assignedEvaluatorParticipantId"
+              name="assignedEvaluatorParticipantId"
+              required
+              defaultValue=""
+              className="w-full rounded-3xl border border-black/10 bg-white px-4 py-3 text-base text-black outline-none transition-colors duration-200 focus:border-black/30"
+            >
+              <option value="" disabled>
+                Select evaluator
+              </option>
+              {evaluatorParticipants.map((participant) => (
+                <option key={participant.id} value={participant.id}>
+                  {participant.label}
+                </option>
+              ))}
+            </select>
+            {state.errors?.assignedEvaluatorParticipantId ? (
+              <p className="text-sm text-rose-600">
+                {state.errors.assignedEvaluatorParticipantId}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {state.errors?.form ? (

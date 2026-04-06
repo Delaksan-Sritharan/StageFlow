@@ -6,10 +6,24 @@ add column if not exists user_id uuid references public.users(id) on delete casc
 alter table if exists public.sessions
 add column if not exists creator_id uuid references public.users(id) on delete cascade;
 
+alter table if exists public.sessions
+add column if not exists evaluation_mode text not null default 'open';
+
 update public.sessions
 set creator_id = coalesce(creator_id, user_id)
 where creator_id is null
   and user_id is not null;
+
+update public.sessions
+set evaluation_mode = 'open'
+where evaluation_mode is null;
+
+alter table if exists public.sessions
+drop constraint if exists sessions_evaluation_mode_check;
+
+alter table if exists public.sessions
+add constraint sessions_evaluation_mode_check
+check (evaluation_mode in ('open', 'assigned'));
 
 alter table if exists public.session_participants
 alter column user_id drop not null;
@@ -28,6 +42,9 @@ add column if not exists invite_token uuid default gen_random_uuid();
 
 alter table if exists public.speakers
 add column if not exists session_participant_id bigint references public.session_participants(id) on delete set null;
+
+alter table if exists public.speakers
+add column if not exists assigned_evaluator_participant_id bigint references public.session_participants(id) on delete set null;
 
 alter table if exists public.feedback
 add column if not exists session_participant_id bigint references public.session_participants(id) on delete set null;
@@ -92,6 +109,9 @@ on public.session_participants (invite_token);
 
 create index if not exists speakers_session_participant_id_idx
 on public.speakers (session_participant_id);
+
+create index if not exists speakers_assigned_evaluator_participant_id_idx
+on public.speakers (assigned_evaluator_participant_id);
 
 create index if not exists feedback_session_participant_id_idx
 on public.feedback (session_participant_id);
@@ -411,6 +431,17 @@ with check (
       and public.session_participants.session_id = public.speakers.session_id
       and coalesce(public.session_participants.accepted, true) = true
   )
+  and (
+    public.speakers.assigned_evaluator_participant_id is null
+    or exists (
+      select 1
+      from public.session_participants
+      where public.session_participants.id = public.speakers.assigned_evaluator_participant_id
+        and public.session_participants.session_id = public.speakers.session_id
+        and coalesce(public.session_participants.accepted, true) = true
+        and public.session_participants.role = 'Evaluator'
+    )
+  )
 );
 
 drop policy if exists "Users can update own speakers" on public.speakers;
@@ -459,12 +490,30 @@ with check (
   exists (
     select 1
     from public.speakers
+    join public.sessions on public.sessions.id = public.speakers.session_id
     join public.session_participants
       on public.session_participants.id = public.feedback.session_participant_id
     where public.speakers.id = public.feedback.speaker_id
       and public.speakers.session_participant_id = public.feedback.session_participant_id
       and public.session_participants.session_id = public.speakers.session_id
-      and public.can_access_session(public.speakers.session_id)
+      and (
+        (
+          public.sessions.evaluation_mode = 'open'
+          and public.can_access_session(public.speakers.session_id)
+        )
+        or (
+          public.sessions.evaluation_mode = 'assigned'
+          and public.speakers.assigned_evaluator_participant_id is not null
+          and exists (
+            select 1
+            from public.session_participants as assigned_evaluator
+            where assigned_evaluator.id = public.speakers.assigned_evaluator_participant_id
+              and assigned_evaluator.user_id = auth.uid()
+              and assigned_evaluator.role = 'Evaluator'
+              and coalesce(assigned_evaluator.accepted, true) = true
+          )
+        )
+      )
   )
 );
 

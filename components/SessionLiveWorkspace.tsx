@@ -5,11 +5,13 @@ import { useMemo, useState } from "react";
 import { FeedbackForm } from "@/components/FeedbackForm";
 import { FeedbackList } from "@/components/FeedbackList";
 import { Timer } from "@/components/Timer";
-import type { Feedback, Speaker, SpeakerRole } from "@/types";
+import type { EvaluationMode, Feedback, Speaker, SpeakerRole } from "@/types";
 
 type SessionLiveWorkspaceProps = {
   sessionId: string;
+  evaluationMode: EvaluationMode;
   isCreator: boolean;
+  viewerParticipantId: string | null;
   viewerRole: SpeakerRole | null;
   speakers: Speaker[];
   participantLabels: Record<string, string>;
@@ -28,7 +30,9 @@ function getInitialFinishedSpeakerIds(
 
 export function SessionLiveWorkspace({
   sessionId,
+  evaluationMode,
   isCreator,
+  viewerParticipantId,
   viewerRole,
   speakers,
   participantLabels,
@@ -67,6 +71,30 @@ export function SessionLiveWorkspace({
   const finishedSpeakers = speakers.filter((speaker) =>
     finishedSpeakerIds.includes(speaker.id),
   );
+
+  const getFeedbackRestrictionReason = (speaker: Speaker) => {
+    if (!speaker.sessionParticipantId) {
+      return "This speaker is not linked to an accepted participant yet, so feedback submission is disabled until the session creator fixes that mapping.";
+    }
+
+    if (evaluationMode === "open") {
+      return null;
+    }
+
+    if (!speaker.assignedEvaluatorParticipantId) {
+      return "Assigned evaluation mode is enabled, but no evaluator has been assigned to this speaker yet.";
+    }
+
+    if (viewerParticipantId !== speaker.assignedEvaluatorParticipantId) {
+      const assignedLabel =
+        participantLabels[speaker.assignedEvaluatorParticipantId] ??
+        "the assigned evaluator";
+
+      return `Only ${assignedLabel} can submit feedback for this speaker in assigned mode.`;
+    }
+
+    return null;
+  };
 
   const handleFinishSpeaker = () => {
     if (!currentSpeaker) {
@@ -206,6 +234,9 @@ export function SessionLiveWorkspace({
                         sessionId={sessionId}
                         speakerId={speaker.id}
                         sessionParticipantId={speaker.sessionParticipantId}
+                        disabledReason={
+                          getFeedbackRestrictionReason(speaker) ?? undefined
+                        }
                       />
                     ) : (
                       <div className="rounded-3xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-7 text-amber-950">
@@ -220,11 +251,23 @@ export function SessionLiveWorkspace({
                       Submitted feedback
                     </p>
                     {speaker.sessionParticipantId ? (
-                      <p className="text-sm text-black/58">
-                        Evaluating{" "}
-                        {participantLabels[speaker.sessionParticipantId] ??
-                          "linked participant"}
-                      </p>
+                      <div className="space-y-1 text-sm text-black/58">
+                        <p>
+                          Evaluating{" "}
+                          {participantLabels[speaker.sessionParticipantId] ??
+                            "linked participant"}
+                        </p>
+                        {evaluationMode === "assigned" ? (
+                          <p>
+                            Assigned evaluator:{" "}
+                            {speaker.assignedEvaluatorParticipantId
+                              ? (participantLabels[
+                                  speaker.assignedEvaluatorParticipantId
+                                ] ?? "Assigned evaluator")
+                              : "Not assigned yet"}
+                          </p>
+                        ) : null}
+                      </div>
                     ) : (
                       <p className="text-sm text-rose-600">
                         Link this speaker to an accepted participant before

@@ -4,11 +4,12 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 
 import { createClient } from "@/utils/supabase/server";
-import type { SpeakerRole } from "@/types";
+import type { EvaluationMode, SpeakerRole } from "@/types";
 
 export type SpeakerFormState = {
   errors?: {
     sessionParticipantId?: string;
+    assignedEvaluatorParticipantId?: string;
     name?: string;
     role?: string;
     minTime?: string;
@@ -84,6 +85,12 @@ function hasBrokenParticipantsPolicy(error: { message?: string } | null) {
   );
 }
 
+function isMissingAssignedEvaluatorColumn(error: { message?: string } | null) {
+  return Boolean(
+    error?.message?.includes("assigned_evaluator_participant_id"),
+  );
+}
+
 async function userOwnsSession(supabase: ReturnType<typeof createClient>, sessionId: string, userId: string) {
   const { data, error } = await supabase
     .from("sessions")
@@ -144,6 +151,55 @@ async function getAcceptedSessionParticipant(
   return { data, error };
 }
 
+async function getAcceptedEvaluatorParticipant(
+  supabase: ReturnType<typeof createClient>,
+  sessionId: string,
+  sessionParticipantId: string,
+) {
+  const { data, error } = await supabase
+    .from("session_participants")
+    .select("id")
+    .eq("id", sessionParticipantId)
+    .eq("session_id", sessionId)
+    .eq("accepted", true)
+    .eq("role", "Evaluator")
+    .maybeSingle();
+
+  return { data, error };
+}
+
+async function getSessionEvaluationMode(
+  supabase: ReturnType<typeof createClient>,
+  sessionId: string,
+) {
+  const { data, error } = await supabase
+    .from("sessions")
+    .select("evaluation_mode")
+    .eq("id", sessionId)
+    .maybeSingle();
+
+  return {
+    evaluationMode: (data?.evaluation_mode as EvaluationMode | undefined) ?? "open",
+    error,
+  };
+}
+
+async function getAcceptedParticipantForUser(
+  supabase: ReturnType<typeof createClient>,
+  sessionId: string,
+  userId: string,
+) {
+  const { data, error } = await supabase
+    .from("session_participants")
+    .select("id")
+    .eq("session_id", sessionId)
+    .eq("user_id", userId)
+    .eq("accepted", true)
+    .maybeSingle();
+
+  return { data, error };
+}
+
 export async function addSpeaker(
   sessionId: string,
   _prevState: SpeakerFormState = initialState,
@@ -154,6 +210,8 @@ export async function addSpeaker(
   const name = formData.get("name")?.toString().trim() ?? "";
   const sessionParticipantId =
     formData.get("sessionParticipantId")?.toString().trim() ?? "";
+  const assignedEvaluatorParticipantId =
+    formData.get("assignedEvaluatorParticipantId")?.toString().trim() ?? "";
   const role = formData.get("role")?.toString().trim() ?? "";
   const minTimeValue = formData.get("minTime")?.toString().trim() ?? "";
   const maxTimeValue = formData.get("maxTime")?.toString().trim() ?? "";
@@ -212,6 +270,7 @@ export async function addSpeaker(
   }
 
   const isCreator = await userOwnsSession(supabase, sessionId, user.id);
+  const { evaluationMode } = await getSessionEvaluationMode(supabase, sessionId);
 
   if (!isCreator) {
     return {
@@ -235,14 +294,63 @@ export async function addSpeaker(
     };
   }
 
-  const { error } = await supabase.from("speakers").insert({
+  if (evaluationMode === "assigned" && !assignedEvaluatorParticipantId) {
+    return {
+      errors: {
+        assignedEvaluatorParticipantId:
+          "Choose the evaluator assigned to this speaker.",
+      },
+    };
+  }
+
+  if (evaluationMode === "assigned" && assignedEvaluatorParticipantId) {
+    const evaluatorLookup = await getAcceptedEvaluatorParticipant(
+      supabase,
+      sessionId,
+      assignedEvaluatorParticipantId,
+    );
+
+    if (!evaluatorLookup.data) {
+      return {
+        errors: {
+          assignedEvaluatorParticipantId:
+            "Choose an accepted evaluator from this session.",
+        },
+      };
+    }
+  }
+
+  let { error } = await supabase.from("speakers").insert({
     session_id: sessionId,
     session_participant_id: sessionParticipantId,
+    assigned_evaluator_participant_id:
+      evaluationMode === "assigned" ? assignedEvaluatorParticipantId : null,
     name,
     role,
     min_time: minTime,
     max_time: maxTime,
   });
+
+  if (isMissingAssignedEvaluatorColumn(error)) {
+    if (evaluationMode === "assigned") {
+      return {
+        errors: {
+          form: "Assigned evaluator support is not set up in Supabase yet. Run the latest SQL migration and try again.",
+        },
+      };
+    }
+
+    const fallbackResult = await supabase.from("speakers").insert({
+      session_id: sessionId,
+      session_participant_id: sessionParticipantId,
+      name,
+      role,
+      min_time: minTime,
+      max_time: maxTime,
+    });
+
+    error = fallbackResult.error;
+  }
 
   if (error) {
     const isMissingTable =
@@ -324,6 +432,7 @@ export async function submitFeedback(
   }
 
   const canAccessSession = await userCanAccessSession(supabase, sessionId, user.id);
+  const { evaluationMode } = await getSessionEvaluationMode(supabase, sessionId);
 
   if (!canAccessSession) {
     return {
@@ -333,12 +442,30 @@ export async function submitFeedback(
     };
   }
 
-  const { data: speaker, error: speakerError } = await supabase
+  const speakerResult = await supabase
     .from("speakers")
-    .select("id, session_id, session_participant_id")
+    .select("id, session_id, session_participant_id, assigned_evaluator_participant_id")
     .eq("id", speakerId)
     .eq("session_id", sessionId)
     .maybeSingle();
+
+  const fallbackSpeakerResult = isMissingAssignedEvaluatorColumn(
+    speakerResult.error,
+  )
+    ? await supabase
+        .from("speakers")
+        .select("id, session_id, session_participant_id")
+        .eq("id", speakerId)
+        .eq("session_id", sessionId)
+        .maybeSingle()
+    : null;
+
+  const speaker = fallbackSpeakerResult
+    ? fallbackSpeakerResult.data
+    : speakerResult.data;
+  const speakerError = fallbackSpeakerResult
+    ? fallbackSpeakerResult.error
+    : speakerResult.error;
 
   if (speakerError) {
     return {
@@ -370,6 +497,37 @@ export async function submitFeedback(
         form: "Feedback must target the participant linked to this speaker.",
       },
     };
+  }
+
+  if (evaluationMode === "assigned") {
+    const viewerParticipant = await getAcceptedParticipantForUser(
+      supabase,
+      sessionId,
+      user.id,
+    );
+
+    if (
+      !("assigned_evaluator_participant_id" in speaker) ||
+      !speaker.assigned_evaluator_participant_id ||
+      !viewerParticipant.data
+    ) {
+      return {
+        errors: {
+          form: "Only the assigned evaluator can submit feedback in assigned mode.",
+        },
+      };
+    }
+
+    if (
+      String(viewerParticipant.data.id) !==
+      String(speaker.assigned_evaluator_participant_id)
+    ) {
+      return {
+        errors: {
+          form: "Only the assigned evaluator can submit feedback in assigned mode.",
+        },
+      };
+    }
   }
 
   const { error } = await supabase.from("feedback").insert({

@@ -42,6 +42,14 @@ export function SpeakerList({ speakers, participantLabels }: SpeakerListProps) {
                     "Linked participant"}
                 </p>
               ) : null}
+              {speaker.assignedEvaluatorParticipantId ? (
+                <p className="mt-1 text-sm text-black/48">
+                  Evaluator:{" "}
+                  {participantLabels?.[
+                    speaker.assignedEvaluatorParticipantId
+                  ] ?? "Assigned evaluator"}
+                </p>
+              ) : null}
             </div>
 
             <div className="flex flex-wrap gap-3 text-sm text-black/65">

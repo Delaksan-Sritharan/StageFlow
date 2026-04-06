@@ -70,6 +70,31 @@ export function SessionCreateForm() {
         ) : null}
       </div>
 
+      <div className="space-y-2">
+        <label
+          htmlFor="evaluationMode"
+          className="text-sm font-semibold tracking-[-0.01em] text-black"
+        >
+          Evaluation mode
+        </label>
+        <select
+          id="evaluationMode"
+          name="evaluationMode"
+          defaultValue="open"
+          className="w-full rounded-3xl border border-black/10 bg-white px-4 py-3 text-base text-black outline-none transition-colors duration-200 focus:border-black/30"
+        >
+          <option value="open">Open</option>
+          <option value="assigned">Assigned</option>
+        </select>
+        <p className="text-xs leading-6 text-black/48">
+          Open stores the default collaborative mode now. Assigned is available
+          for future restriction rules.
+        </p>
+        {state.errors?.evaluationMode ? (
+          <p className="text-sm text-rose-600">{state.errors.evaluationMode}</p>
+        ) : null}
+      </div>
+
       {state.errors?.form ? (
         <p className="rounded-3xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {state.errors.form}

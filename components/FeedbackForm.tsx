@@ -16,6 +16,7 @@ type FeedbackFormProps = {
   sessionId: string;
   speakerId: string;
   sessionParticipantId: string;
+  disabledReason?: string;
 };
 
 function SubmitButton() {
@@ -71,6 +72,7 @@ export function FeedbackForm({
   sessionId,
   speakerId,
   sessionParticipantId,
+  disabledReason,
 }: FeedbackFormProps) {
   const submitFeedbackForSpeaker = submitFeedback.bind(
     null,
@@ -90,52 +92,63 @@ export function FeedbackForm({
         value={sessionParticipantId}
       />
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <ScoreField
-          id={`contentScore-${speakerId}`}
-          name="contentScore"
-          label="Content score"
-          error={state.errors?.contentScore}
-        />
-        <ScoreField
-          id={`deliveryScore-${speakerId}`}
-          name="deliveryScore"
-          label="Delivery score"
-          error={state.errors?.deliveryScore}
-        />
-        <ScoreField
-          id={`confidenceScore-${speakerId}`}
-          name="confidenceScore"
-          label="Confidence score"
-          error={state.errors?.confidenceScore}
-        />
-      </div>
+      <fieldset
+        disabled={Boolean(disabledReason)}
+        className="space-y-5 disabled:opacity-55"
+      >
+        <div className="grid gap-4 md:grid-cols-3">
+          <ScoreField
+            id={`contentScore-${speakerId}`}
+            name="contentScore"
+            label="Content score"
+            error={state.errors?.contentScore}
+          />
+          <ScoreField
+            id={`deliveryScore-${speakerId}`}
+            name="deliveryScore"
+            label="Delivery score"
+            error={state.errors?.deliveryScore}
+          />
+          <ScoreField
+            id={`confidenceScore-${speakerId}`}
+            name="confidenceScore"
+            label="Confidence score"
+            error={state.errors?.confidenceScore}
+          />
+        </div>
 
-      <div className="space-y-2">
-        <label
-          htmlFor={`comment-${speakerId}`}
-          className="text-sm font-semibold tracking-[-0.01em] text-black"
-        >
-          Comment
-        </label>
-        <textarea
-          id={`comment-${speakerId}`}
-          name="comment"
-          rows={4}
-          placeholder="Optional notes about the speech or evaluation."
-          className="w-full resize-y rounded-3xl border border-black/10 bg-white px-4 py-3 text-base text-black outline-none transition-colors duration-200 placeholder:text-black/35 focus:border-black/30"
-        />
-      </div>
+        <div className="space-y-2">
+          <label
+            htmlFor={`comment-${speakerId}`}
+            className="text-sm font-semibold tracking-[-0.01em] text-black"
+          >
+            Comment
+          </label>
+          <textarea
+            id={`comment-${speakerId}`}
+            name="comment"
+            rows={4}
+            placeholder="Optional notes about the speech or evaluation."
+            className="w-full resize-y rounded-3xl border border-black/10 bg-white px-4 py-3 text-base text-black outline-none transition-colors duration-200 placeholder:text-black/35 focus:border-black/30"
+          />
+        </div>
+
+        <div className="flex items-center justify-end">
+          <SubmitButton />
+        </div>
+      </fieldset>
+
+      {disabledReason ? (
+        <p className="rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          {disabledReason}
+        </p>
+      ) : null}
 
       {state.errors?.form ? (
         <p className="rounded-3xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {state.errors.form}
         </p>
       ) : null}
-
-      <div className="flex items-center justify-end">
-        <SubmitButton />
-      </div>
     </form>
   );
 }

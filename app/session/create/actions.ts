@@ -6,6 +6,10 @@ import { cookies } from "next/headers";
 
 import { createClient } from "@/utils/supabase/server";
 
+const validEvaluationModes = ["open", "assigned"] as const;
+
+type EvaluationMode = (typeof validEvaluationModes)[number];
+
 function isMissingCreatorIdColumn(error: { message?: string } | null) {
   return Boolean(error?.message?.includes("creator_id"));
 }
@@ -24,7 +28,7 @@ function isSessionsInsertPolicyMismatch(error: {
 
 async function insertSessionWithCompatibility(
   supabase: ReturnType<typeof createClient>,
-  values: { title: string; date: string },
+  values: { title: string; date: string; evaluation_mode: EvaluationMode },
   userId: string,
 ) {
   const attempts = [
@@ -67,7 +71,7 @@ async function insertSessionWithCompatibility(
 
 async function findRecentlyCreatedSessionId(
   supabase: ReturnType<typeof createClient>,
-  values: { title: string; date: string },
+  values: { title: string; date: string; evaluation_mode: EvaluationMode },
   createdAfter: string,
   userId: string,
 ) {
@@ -97,6 +101,7 @@ export type SessionFormState = {
   errors?: {
     title?: string;
     date?: string;
+    evaluationMode?: string;
     form?: string;
   };
 };
@@ -117,6 +122,8 @@ export async function createSession(
 
   const title = formData.get("title")?.toString().trim() ?? "";
   const date = formData.get("date")?.toString().trim() ?? "";
+  const evaluationModeValue =
+    formData.get("evaluationMode")?.toString().trim() ?? "open";
 
   const errors: SessionFormState["errors"] = {};
 
@@ -130,9 +137,15 @@ export async function createSession(
     errors.date = "Enter a valid date.";
   }
 
-  if (errors.title || errors.date) {
+  if (!validEvaluationModes.includes(evaluationModeValue as EvaluationMode)) {
+    errors.evaluationMode = "Choose a valid evaluation mode.";
+  }
+
+  if (errors.title || errors.date || errors.evaluationMode) {
     return { errors };
   }
+
+  const evaluationMode = evaluationModeValue as EvaluationMode;
 
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
@@ -151,7 +164,7 @@ export async function createSession(
   const createdAfter = new Date().toISOString();
   const insertResult = await insertSessionWithCompatibility(
     supabase,
-    { title, date },
+    { title, date, evaluation_mode: evaluationMode },
     user.id,
   );
 
@@ -161,7 +174,7 @@ export async function createSession(
   if (!error) {
     const fetchResult = await findRecentlyCreatedSessionId(
       supabase,
-      { title, date },
+      { title, date, evaluation_mode: evaluationMode },
       createdAfter,
       user.id,
     );

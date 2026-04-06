@@ -8,7 +8,12 @@ import { SpeakerForm } from "@/components/SpeakerForm";
 import { SessionParticipantsList } from "@/components/SessionParticipantsList";
 import { SpeakerList } from "@/components/SpeakerList";
 import { SessionInvitationsList } from "@/components/SessionInvitationsList";
-import type { Feedback, SessionParticipant, Speaker } from "@/types";
+import type {
+  EvaluationMode,
+  Feedback,
+  SessionParticipant,
+  Speaker,
+} from "@/types";
 import { createClient } from "@/utils/supabase/server";
 
 function getParticipantLabel(
@@ -67,6 +72,10 @@ function isMissingSpeakersTable(
   );
 }
 
+function isMissingAssignedEvaluatorColumn(error: { message?: string } | null) {
+  return Boolean(error?.message?.includes("assigned_evaluator_participant_id"));
+}
+
 function isMissingFeedbackTable(
   error: { code?: string; message?: string } | null,
 ) {
@@ -122,13 +131,32 @@ export default async function SessionDetailPage({
     .select("*")
     .eq("session_id", id)
     .order("created_at", { ascending: true });
-  const { data: speakersData, error: speakersError } = await supabase
+  const speakersResult = await supabase
     .from("speakers")
     .select(
-      "id, session_id, session_participant_id, name, role, min_time, max_time",
+      "id, session_id, session_participant_id, assigned_evaluator_participant_id, name, role, min_time, max_time",
     )
     .eq("session_id", id)
     .order("created_at", { ascending: true });
+
+  const fallbackSpeakersResult = isMissingAssignedEvaluatorColumn(
+    speakersResult.error,
+  )
+    ? await supabase
+        .from("speakers")
+        .select(
+          "id, session_id, session_participant_id, name, role, min_time, max_time",
+        )
+        .eq("session_id", id)
+        .order("created_at", { ascending: true })
+    : null;
+
+  const speakersData = fallbackSpeakersResult
+    ? fallbackSpeakersResult.data
+    : speakersResult.data;
+  const speakersError = fallbackSpeakersResult
+    ? fallbackSpeakersResult.error
+    : speakersResult.error;
   const speakerIds = speakersData?.map((speaker) => speaker.id) ?? [];
   const { data: feedbackData, error: feedbackError } = speakerIds.length
     ? await supabase
@@ -212,6 +240,8 @@ export default async function SessionDetailPage({
   );
   const hasRoleBasedAccess = Boolean(isCreator || viewerParticipant);
   const viewerRole = isCreator ? null : (viewerParticipant?.role ?? null);
+  const evaluationMode =
+    (session?.evaluation_mode as EvaluationMode | undefined) ?? "open";
   const speakers: Speaker[] =
     speakersData?.map((speaker) => ({
       id: String(speaker.id),
@@ -219,6 +249,11 @@ export default async function SessionDetailPage({
       sessionParticipantId: speaker.session_participant_id
         ? String(speaker.session_participant_id)
         : null,
+      assignedEvaluatorParticipantId:
+        "assigned_evaluator_participant_id" in speaker &&
+        speaker.assigned_evaluator_participant_id
+          ? String(speaker.assigned_evaluator_participant_id)
+          : null,
       name: speaker.name,
       role: speaker.role,
       minTime: speaker.min_time,
@@ -384,7 +419,9 @@ export default async function SessionDetailPage({
                   <SessionLiveWorkspace
                     key={liveWorkspaceKey}
                     sessionId={id}
+                    evaluationMode={evaluationMode}
                     isCreator={isCreator}
+                    viewerParticipantId={viewerParticipant?.id ?? null}
                     viewerRole={viewerRole}
                     speakers={speakers}
                     participantLabels={participantLabels}
@@ -485,6 +522,7 @@ export default async function SessionDetailPage({
                     ) : (
                       <SpeakerForm
                         sessionId={id}
+                        evaluationMode={evaluationMode}
                         participants={acceptedParticipantsForSpeakerSelection.map(
                           (participant) => ({
                             id: participant.id,
@@ -495,6 +533,17 @@ export default async function SessionDetailPage({
                             role: participant.role,
                           }),
                         )}
+                        evaluatorParticipants={acceptedParticipantsForSpeakerSelection
+                          .filter(
+                            (participant) => participant.role === "Evaluator",
+                          )
+                          .map((participant) => ({
+                            id: participant.id,
+                            label: getParticipantLabel(
+                              participant,
+                              sessionOwnerId,
+                            ),
+                          }))}
                       />
                     )}
                   </div>
