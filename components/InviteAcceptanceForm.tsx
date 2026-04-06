@@ -6,12 +6,18 @@ import { useFormStatus } from "react-dom";
 import {
   acceptInvitation,
   type AcceptInvitationState,
+  rejectInvitation,
+  type RejectInvitationState,
 } from "@/app/invite/[token]/actions";
 import type { SpeakerRole } from "@/types";
 
 const roles: SpeakerRole[] = ["Speaker", "Evaluator"];
 
 const initialState: AcceptInvitationState = {
+  errors: {},
+};
+
+const initialRejectState: RejectInvitationState = {
   errors: {},
 };
 
@@ -34,57 +40,93 @@ function SubmitButton() {
   );
 }
 
+function RejectButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="inline-flex w-full items-center justify-center rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
+    >
+      {pending ? "Rejecting..." : "Reject invitation"}
+    </button>
+  );
+}
+
 export function InviteAcceptanceForm({
   token,
   assignedRole,
 }: InviteAcceptanceFormProps) {
-  const invitationAction = acceptInvitation.bind(null, token);
-  const [state, formAction] = useActionState(invitationAction, initialState);
+  const acceptInvitationAction = acceptInvitation.bind(null, token);
+  const rejectInvitationAction = rejectInvitation.bind(null, token);
+  const [acceptState, acceptFormAction] = useActionState(
+    acceptInvitationAction,
+    initialState,
+  );
+  const [rejectState, rejectFormAction] = useActionState(
+    rejectInvitationAction,
+    initialRejectState,
+  );
 
   return (
-    <form action={formAction} className="space-y-5">
-      {assignedRole ? (
-        <div className="rounded-3xl border border-black/8 bg-white/82 p-4">
-          <p className="text-sm font-semibold text-black">Assigned role</p>
-          <p className="mt-2 text-sm leading-7 text-black/62">{assignedRole}</p>
-          <input type="hidden" name="role" value={assignedRole} />
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <label
-            htmlFor="role"
-            className="text-sm font-semibold tracking-[-0.01em] text-black"
-          >
-            Choose your role
-          </label>
-          <select
-            id="role"
-            name="role"
-            required
-            defaultValue="Speaker"
-            className="w-full rounded-3xl border border-black/10 bg-white px-4 py-3 text-base text-black outline-none transition-colors duration-200 focus:border-black/30"
-          >
-            {roles.map((role) => (
-              <option key={role} value={role}>
-                {role}
-              </option>
-            ))}
-          </select>
-          {state.errors?.role ? (
-            <p className="text-sm text-rose-600">{state.errors.role}</p>
-          ) : null}
-        </div>
-      )}
+    <div className="space-y-4">
+      <form action={acceptFormAction} className="space-y-5">
+        {assignedRole ? (
+          <div className="rounded-3xl border border-black/8 bg-white/82 p-4">
+            <p className="text-sm font-semibold text-black">Assigned role</p>
+            <p className="mt-2 text-sm leading-7 text-black/62">
+              {assignedRole}
+            </p>
+            <input type="hidden" name="role" value={assignedRole} />
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <label
+              htmlFor="role"
+              className="text-sm font-semibold tracking-[-0.01em] text-black"
+            >
+              Choose your role
+            </label>
+            <select
+              id="role"
+              name="role"
+              required
+              defaultValue="Speaker"
+              className="w-full rounded-3xl border border-black/10 bg-white px-4 py-3 text-base text-black outline-none transition-colors duration-200 focus:border-black/30"
+            >
+              {roles.map((role) => (
+                <option key={role} value={role}>
+                  {role}
+                </option>
+              ))}
+            </select>
+            {acceptState.errors?.role ? (
+              <p className="text-sm text-rose-600">{acceptState.errors.role}</p>
+            ) : null}
+          </div>
+        )}
 
-      {state.errors?.form ? (
+        {acceptState.errors?.form ? (
+          <p className="rounded-3xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {acceptState.errors.form}
+          </p>
+        ) : null}
+
+        <div className="flex justify-end">
+          <SubmitButton />
+        </div>
+      </form>
+
+      {rejectState.errors?.form ? (
         <p className="rounded-3xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          {state.errors.form}
+          {rejectState.errors.form}
         </p>
       ) : null}
 
-      <div className="flex justify-end">
-        <SubmitButton />
-      </div>
-    </form>
+      <form action={rejectFormAction} className="flex justify-end">
+        <RejectButton />
+      </form>
+    </div>
   );
 }

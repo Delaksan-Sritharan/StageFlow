@@ -65,7 +65,7 @@ export function SessionParticipantsList({
             </div>
 
             <div className="rounded-full border border-black/8 bg-black/2 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-black/58">
-              {participant.accepted ? "Accepted" : "Pending"}
+              {participant.status === "accepted" ? "Accepted" : "Pending"}
             </div>
           </div>
         </article>

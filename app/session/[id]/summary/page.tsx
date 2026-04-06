@@ -100,6 +100,12 @@ export default async function SessionSummaryPage({
       invitedEmail: participant.invited_email ?? null,
       role: participant.role ?? null,
       accepted: participant.accepted ?? true,
+      status:
+        participant.status === "accepted" || participant.status === "rejected"
+          ? participant.status
+          : participant.accepted
+            ? "accepted"
+            : "pending",
       inviteToken: participant.invite_token ?? null,
     })) ?? [];
 

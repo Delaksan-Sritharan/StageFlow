@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 
 import { createClient } from "@/utils/supabase/server";
-import type { EvaluationMode, SpeakerRole } from "@/types";
+import type { EvaluationMode, InvitationStatus, SpeakerRole } from "@/types";
 
 export type SpeakerFormState = {
   errors?: {
@@ -37,6 +37,12 @@ export type InviteParticipantFormState = {
   inviteLink?: string;
 };
 
+export type DeleteInvitationState = {
+  errors?: {
+    form?: string;
+  };
+};
+
 const initialState: SpeakerFormState = {
   errors: {},
 };
@@ -46,6 +52,10 @@ const initialFeedbackState: FeedbackFormState = {
 };
 
 const initialInviteState: InviteParticipantFormState = {
+  errors: {},
+};
+
+const initialDeleteInvitationState: DeleteInvitationState = {
   errors: {},
 };
 
@@ -93,6 +103,21 @@ function isMissingAssignedEvaluatorColumn(error: { message?: string } | null) {
 
 function isMissingEvaluationModeColumn(error: { message?: string } | null) {
   return Boolean(error?.message?.includes("evaluation_mode"));
+}
+
+function isMissingInvitationStatusColumn(error: { message?: string } | null) {
+  return Boolean(error?.message?.includes("status"));
+}
+
+function getInvitationStatus(record: {
+  status?: string | null;
+  accepted?: boolean | null;
+}): InvitationStatus {
+  if (record.status === "accepted" || record.status === "rejected") {
+    return record.status;
+  }
+
+  return record.accepted ? "accepted" : "pending";
 }
 
 async function userOwnsSession(supabase: ReturnType<typeof createClient>, sessionId: string, userId: string) {
@@ -629,27 +654,47 @@ export async function createInvitation(
       invited_email: inviteMode === "email" ? invitedEmail : null,
       role,
       accepted: false,
+      status: "pending",
     })
     .select("invite_token")
     .single();
 
-  if (error) {
+  let invitationData = data;
+  let invitationError = error;
+
+  if (isMissingInvitationStatusColumn(error)) {
+    const fallbackResult = await supabase
+      .from("session_participants")
+      .insert({
+        session_id: sessionId,
+        invited_email: inviteMode === "email" ? invitedEmail : null,
+        role,
+        accepted: false,
+      })
+      .select("invite_token")
+      .single();
+
+    invitationData = fallbackResult.data;
+    invitationError = fallbackResult.error;
+  }
+
+  if (invitationError) {
     const isMissingTable =
-      error.code === "PGRST205" ||
-      error.message.includes("Could not find the table 'public.session_participants'");
+      invitationError.code === "PGRST205" ||
+      invitationError.message.includes("Could not find the table 'public.session_participants'");
     const isMissingInvitationColumns =
-      error.message.includes("invited_email") ||
-      error.message.includes("invite_token") ||
-      error.message.includes("accepted") ||
-      error.message.includes("role");
-    const isBrokenPolicy = hasBrokenParticipantsPolicy(error);
+      invitationError.message.includes("invited_email") ||
+      invitationError.message.includes("invite_token") ||
+      invitationError.message.includes("accepted") ||
+      invitationError.message.includes("role");
+    const isBrokenPolicy = hasBrokenParticipantsPolicy(invitationError);
 
     return {
       errors: {
         form:
           isMissingTable || isMissingInvitationColumns || isBrokenPolicy
             ? "The invitation schema or participant policies are not set up yet. Run the SQL in supabase/sessions.sql and try again."
-            : `Failed to save invitation: ${error.message}`,
+            : `Failed to save invitation: ${invitationError.message}`,
       },
     };
   }
@@ -659,8 +704,8 @@ export async function createInvitation(
   if (inviteMode === "link") {
     return {
       errors: {},
-      message: "Invite link generated.",
-      inviteLink: `/invite/${data.invite_token}`,
+      message: "Invite link generated with pending status.",
+      inviteLink: `/invite/${invitationData.invite_token}`,
     };
   }
 
@@ -668,4 +713,101 @@ export async function createInvitation(
     errors: {},
     message: `Invitation saved for ${invitedEmail}.`,
   };
+}
+
+export async function deleteInvitation(
+  sessionId: string,
+  invitationId: string,
+  _prevState: DeleteInvitationState = initialDeleteInvitationState,
+): Promise<DeleteInvitationState> {
+  void _prevState;
+
+  const cookieStore = await cookies();
+  const supabase = createClient(cookieStore);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return {
+      errors: {
+        form: "You must be logged in to delete invitations.",
+      },
+    };
+  }
+
+  const isCreator = await userOwnsSession(supabase, sessionId, user.id);
+
+  if (!isCreator) {
+    return {
+      errors: {
+        form: "Only the session creator can delete invitations.",
+      },
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("session_participants")
+    .select("id, accepted, status")
+    .eq("id", invitationId)
+    .eq("session_id", sessionId)
+    .maybeSingle();
+
+  let invitationData = data;
+  let invitationError = error;
+
+  if (isMissingInvitationStatusColumn(error)) {
+    const fallbackResult = await supabase
+      .from("session_participants")
+      .select("id, accepted")
+      .eq("id", invitationId)
+      .eq("session_id", sessionId)
+      .maybeSingle();
+
+    invitationData = fallbackResult.data;
+    invitationError = fallbackResult.error;
+  }
+
+  if (invitationError) {
+    return {
+      errors: {
+        form: `Failed to load invitation: ${invitationError.message}`,
+      },
+    };
+  }
+
+  if (!invitationData) {
+    return {
+      errors: {
+        form: "This invitation could not be found.",
+      },
+    };
+  }
+
+  if (getInvitationStatus(invitationData) !== "pending") {
+    return {
+      errors: {
+        form: "Only pending invitations can be deleted.",
+      },
+    };
+  }
+
+  const { error: deleteError } = await supabase
+    .from("session_participants")
+    .delete()
+    .eq("id", invitationId)
+    .eq("session_id", sessionId);
+
+  if (deleteError) {
+    return {
+      errors: {
+        form: `Failed to delete invitation: ${deleteError.message}`,
+      },
+    };
+  }
+
+  revalidatePath("/");
+  revalidatePath(`/session/${sessionId}`);
+
+  return initialDeleteInvitationState;
 }

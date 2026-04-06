@@ -11,6 +11,7 @@ import { SessionInvitationsList } from "@/components/SessionInvitationsList";
 import type {
   EvaluationMode,
   Feedback,
+  InvitationStatus,
   SessionParticipant,
   Speaker,
 } from "@/types";
@@ -112,6 +113,17 @@ function isBrokenParticipantsPolicy(error: { message?: string } | null) {
   );
 }
 
+function getInvitationStatus(record: {
+  status?: string | null;
+  accepted?: boolean | null;
+}): InvitationStatus {
+  if (record.status === "accepted" || record.status === "rejected") {
+    return record.status;
+  }
+
+  return record.accepted ? "accepted" : "pending";
+}
+
 export default async function SessionDetailPage({
   params,
 }: SessionDetailPageProps) {
@@ -186,6 +198,7 @@ export default async function SessionDetailPage({
         invitedEmail: participant.invited_email ?? null,
         role: participant.role ?? null,
         accepted: participant.accepted ?? true,
+        status: getInvitationStatus(participant),
         inviteToken: participant.invite_token ?? null,
       }))
       .filter(
@@ -198,7 +211,8 @@ export default async function SessionDetailPage({
       ) ?? [];
   const acceptedParticipantsBase = participants.filter(
     (participant) =>
-      participant.accepted || participant.userId === sessionOwnerId,
+      participant.status === "accepted" ||
+      participant.userId === sessionOwnerId,
   );
   const acceptedParticipants =
     sessionOwnerId &&
@@ -213,13 +227,14 @@ export default async function SessionDetailPage({
             invitedEmail: null,
             role: null,
             accepted: true,
+            status: "accepted",
             inviteToken: null,
           },
           ...acceptedParticipantsBase,
         ]
       : acceptedParticipantsBase;
   const acceptedParticipantsForSpeakerSelection = participants.filter(
-    (participant) => participant.accepted,
+    (participant) => participant.status === "accepted",
   );
   const participantLabels = Object.fromEntries(
     acceptedParticipants.map((participant) => [
@@ -470,7 +485,7 @@ export default async function SessionDetailPage({
                         Invitations
                       </p>
                       <h2 className="text-2xl font-semibold tracking-[-0.04em] text-black">
-                        Pending and accepted invites
+                        Invitation activity
                       </h2>
                     </div>
 
@@ -484,7 +499,10 @@ export default async function SessionDetailPage({
                         Failed to load invitations: {participantsError.message}
                       </p>
                     ) : (
-                      <SessionInvitationsList invitations={participants} />
+                      <SessionInvitationsList
+                        sessionId={id}
+                        invitations={participants}
+                      />
                     )}
                   </section>
                 </section>

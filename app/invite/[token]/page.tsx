@@ -3,12 +3,15 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { InviteAcceptanceForm } from "@/components/InviteAcceptanceForm";
-import type { SpeakerRole } from "@/types";
+import type { InvitationStatus, SpeakerRole } from "@/types";
 import { createClient } from "@/utils/supabase/server";
 
 type InvitePageProps = {
   params: Promise<{
     token: string;
+  }>;
+  searchParams?: Promise<{
+    rejected?: string;
   }>;
 };
 
@@ -20,8 +23,30 @@ type InvitationRecord = {
   invited_email: string | null;
   assigned_role: SpeakerRole | null;
   accepted: boolean;
+  status?: InvitationStatus | null;
   participant_user_id: string | null;
 };
+
+function getInvitationStatus(
+  invitation: InvitationRecord | null,
+): InvitationStatus {
+  if (invitation?.status === "accepted" || invitation?.status === "rejected") {
+    return invitation.status;
+  }
+
+  return invitation?.accepted ? "accepted" : "pending";
+}
+
+function getInvitationStatusLabel(status: InvitationStatus) {
+  switch (status) {
+    case "accepted":
+      return "Accepted";
+    case "rejected":
+      return "Rejected";
+    default:
+      return "Pending";
+  }
+}
 
 function isValidInviteToken(token: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -42,8 +67,12 @@ function buildAuthHref(pathname: string, token: string) {
   return `${pathname}?redirectTo=${encodeURIComponent(`/invite/${token}`)}`;
 }
 
-export default async function InvitePage({ params }: InvitePageProps) {
+export default async function InvitePage({
+  params,
+  searchParams,
+}: InvitePageProps) {
   const { token } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
 
   if (!isValidInviteToken(token)) {
     return (
@@ -68,8 +97,13 @@ export default async function InvitePage({ params }: InvitePageProps) {
   const invitation = (
     Array.isArray(data) ? data[0] : data
   ) as InvitationRecord | null;
+  const invitationStatus = getInvitationStatus(invitation);
+  const rejectedByCurrentUser = resolvedSearchParams?.rejected === "1";
 
-  if (invitation?.accepted && invitation.participant_user_id === user?.id) {
+  if (
+    invitationStatus === "accepted" &&
+    invitation?.participant_user_id === user?.id
+  ) {
     redirect(`/session/${invitation.session_id}`);
   }
 
@@ -145,7 +179,7 @@ export default async function InvitePage({ params }: InvitePageProps) {
               <div>
                 <p className="text-sm font-semibold text-black">Status</p>
                 <p className="mt-1 text-sm text-black/62">
-                  {invitation.accepted ? "Accepted" : "Pending acceptance"}
+                  {getInvitationStatusLabel(invitationStatus)}
                 </p>
               </div>
             </div>
@@ -182,7 +216,7 @@ export default async function InvitePage({ params }: InvitePageProps) {
                   </Link>
                 </div>
               </div>
-            ) : invitation.accepted &&
+            ) : invitationStatus === "accepted" &&
               invitation.participant_user_id &&
               invitation.participant_user_id !== user.id ? (
               <div className="space-y-3 rounded-3xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">
@@ -204,18 +238,30 @@ export default async function InvitePage({ params }: InvitePageProps) {
                   Log in with that email address to accept it.
                 </p>
               </div>
+            ) : invitationStatus === "rejected" ? (
+              <div className="space-y-3 rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+                <h2 className="text-lg font-semibold text-black">
+                  Invitation closed
+                </h2>
+                <p>
+                  {rejectedByCurrentUser ||
+                  invitation.participant_user_id === user.id
+                    ? "You have rejected this invitation"
+                    : "This invitation has already been rejected."}
+                </p>
+              </div>
             ) : (
               <div className="space-y-5">
                 <div className="space-y-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-black/42">
-                    Accept invitation
+                    Respond to invitation
                   </p>
                   <h2 className="text-2xl font-semibold tracking-[-0.04em] text-black">
                     Join as {invitation.assigned_role ?? "your selected role"}
                   </h2>
                   <p className="text-sm leading-7 text-black/62">
-                    Confirm your role and accept this session invitation. You
-                    will be redirected straight into the session page.
+                    Accept this invitation to join the session, or reject it to
+                    close the invite without deleting the record.
                   </p>
                 </div>
 

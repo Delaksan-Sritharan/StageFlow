@@ -2,6 +2,8 @@ export type SpeakerRole = "Speaker" | "Evaluator";
 
 export type EvaluationMode = "open" | "assigned";
 
+export type InvitationStatus = "pending" | "accepted" | "rejected";
+
 export type Session = {
   id: string;
   creatorId?: string | null;
@@ -17,6 +19,7 @@ export type SessionParticipant = {
   invitedEmail: string | null;
   role: SpeakerRole | null;
   accepted: boolean;
+  status: InvitationStatus;
   inviteToken: string | null;
 };
 

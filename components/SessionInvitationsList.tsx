@@ -1,10 +1,35 @@
+import { DeleteInvitationButton } from "@/components/DeleteInvitationButton";
 import type { SessionParticipant } from "@/types";
 
 type SessionInvitationsListProps = {
+  sessionId: string;
   invitations: SessionParticipant[];
 };
 
+function getStatusLabel(status: SessionParticipant["status"]) {
+  switch (status) {
+    case "accepted":
+      return "Accepted";
+    case "rejected":
+      return "Rejected";
+    default:
+      return "Pending";
+  }
+}
+
+function getStatusClassName(status: SessionParticipant["status"]) {
+  switch (status) {
+    case "accepted":
+      return "rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-800";
+    case "rejected":
+      return "rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-rose-700";
+    default:
+      return "rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-amber-800";
+  }
+}
+
 export function SessionInvitationsList({
+  sessionId,
   invitations,
 }: SessionInvitationsListProps) {
   if (invitations.length === 0) {
@@ -32,9 +57,26 @@ export function SessionInvitationsList({
               </p>
             </div>
 
-            <div className="rounded-full border border-black/8 bg-black/2 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-black/58">
-              {invitation.accepted ? "Accepted" : "Pending"}
+            <div className={getStatusClassName(invitation.status)}>
+              {getStatusLabel(invitation.status)}
             </div>
+          </div>
+
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-black/58">
+              {invitation.status === "pending"
+                ? "Waiting for the invited participant to respond."
+                : invitation.status === "accepted"
+                  ? "This participant already accepted the invitation."
+                  : "This invitation was rejected and kept for recordkeeping."}
+            </p>
+
+            {invitation.status === "pending" ? (
+              <DeleteInvitationButton
+                sessionId={sessionId}
+                invitationId={invitation.id}
+              />
+            ) : null}
           </div>
 
           {invitation.inviteToken ? (

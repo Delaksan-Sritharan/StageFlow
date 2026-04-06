@@ -23,7 +23,8 @@ create table if not exists public.session_participants (
   user_id uuid references public.users(id) on delete cascade,
   invited_email text,
   role text check (role in ('Speaker', 'Evaluator')),
-  accepted boolean not null default true,
+  accepted boolean not null default false,
+  status text not null default 'pending' check (status in ('pending', 'accepted', 'rejected')),
   invite_token uuid not null default gen_random_uuid(),
   created_at timestamp with time zone not null default now(),
   unique (session_id, user_id)
@@ -73,7 +74,8 @@ check (evaluation_mode in ('open', 'assigned'));
 alter table public.session_participants alter column user_id drop not null;
 alter table public.session_participants add column if not exists invited_email text;
 alter table public.session_participants add column if not exists role text;
-alter table public.session_participants add column if not exists accepted boolean not null default true;
+alter table public.session_participants add column if not exists accepted boolean not null default false;
+alter table public.session_participants add column if not exists status text not null default 'pending';
 alter table public.session_participants add column if not exists invite_token uuid not null default gen_random_uuid();
 alter table public.speakers add column if not exists session_participant_id bigint references public.session_participants(id) on delete set null;
 alter table public.speakers add column if not exists assigned_evaluator_participant_id bigint references public.session_participants(id) on delete set null;
@@ -90,23 +92,46 @@ update public.session_participants
 set role = 'Speaker'
 where role = 'Table Topics';
 
+update public.session_participants
+set status = case
+  when coalesce(public.session_participants.accepted, false) then 'accepted'
+  else 'pending'
+end
+where public.session_participants.status is null;
+
+update public.session_participants
+set accepted = true
+where public.session_participants.status = 'accepted'
+  and public.session_participants.accepted is distinct from true;
+
+update public.session_participants
+set accepted = false
+where public.session_participants.status in ('pending', 'rejected')
+  and public.session_participants.accepted is distinct from false;
+
 update public.speakers
 set role = 'Speaker'
 where role = 'Table Topics';
 
 alter table public.session_participants
 drop constraint if exists session_participants_role_check;
+alter table public.session_participants
+drop constraint if exists session_participants_status_check;
 alter table public.speakers
 drop constraint if exists speakers_role_check;
 alter table public.session_participants
 add constraint session_participants_role_check
 check (role is null or role in ('Speaker', 'Evaluator'));
+alter table public.session_participants
+add constraint session_participants_status_check
+check (status in ('pending', 'accepted', 'rejected'));
 alter table public.speakers
 add constraint speakers_role_check
 check (role in ('Speaker', 'Evaluator'));
 
-insert into public.session_participants (session_id, user_id)
+insert into public.session_participants (session_id, user_id, accepted, status)
 select public.sessions.id, public.sessions.creator_id
+     , true, 'accepted'
 from public.sessions
 where public.sessions.creator_id is not null
 on conflict (session_id, user_id) do nothing;
@@ -126,12 +151,13 @@ set search_path = public
 as $$
 begin
   if new.creator_id is not null then
-    insert into public.session_participants (session_id, user_id, invited_email, accepted)
+    insert into public.session_participants (session_id, user_id, invited_email, accepted, status)
     values (
       new.id,
       new.creator_id,
       (select public.users.email from public.users where public.users.id = new.creator_id),
-      true
+      true,
+      'accepted'
     )
     on conflict (session_id, user_id) do nothing;
   end if;
@@ -209,6 +235,8 @@ as $$
       or public.is_session_participant(target_session_id, target_user_id);
 $$;
 
+drop function if exists public.get_session_invitation(uuid);
+
 create or replace function public.get_session_invitation(
   target_invite_token uuid
 )
@@ -220,6 +248,7 @@ returns table (
   invited_email text,
   assigned_role text,
   accepted boolean,
+  status text,
   participant_user_id uuid
 )
 language sql
@@ -233,7 +262,11 @@ as $$
     public.sessions.date,
     public.session_participants.invited_email,
     public.session_participants.role,
-    coalesce(public.session_participants.accepted, true),
+    coalesce(public.session_participants.accepted, false),
+    coalesce(
+      public.session_participants.status,
+      case when coalesce(public.session_participants.accepted, false) then 'accepted' else 'pending' end
+    ),
     public.session_participants.user_id
   from public.session_participants
   join public.sessions on public.sessions.id = public.session_participants.session_id
@@ -266,7 +299,10 @@ as $$
   from public.session_participants
   join public.sessions on public.sessions.id = public.session_participants.session_id
   left join public.users on public.users.id = auth.uid()
-  where coalesce(public.session_participants.accepted, false) = false
+  where coalesce(
+      public.session_participants.status,
+      case when coalesce(public.session_participants.accepted, false) then 'accepted' else 'pending' end
+    ) = 'pending'
     and (
       public.session_participants.user_id = auth.uid()
       or (
@@ -311,7 +347,11 @@ begin
     public.session_participants.user_id,
     public.session_participants.invited_email,
     public.session_participants.role,
-    coalesce(public.session_participants.accepted, true) as accepted
+    coalesce(public.session_participants.accepted, false) as accepted,
+    coalesce(
+      public.session_participants.status,
+      case when coalesce(public.session_participants.accepted, false) then 'accepted' else 'pending' end
+    ) as status
   into invitation
   from public.session_participants
   where public.session_participants.invite_token = target_invite_token;
@@ -322,6 +362,14 @@ begin
 
   if invitation.user_id is not null and invitation.user_id <> current_user_id then
     raise exception 'This invitation has already been claimed by another participant.';
+  end if;
+
+  if invitation.status = 'rejected' then
+    raise exception 'This invitation has already been rejected.';
+  end if;
+
+  if invitation.accepted and invitation.status = 'accepted' and invitation.user_id = current_user_id then
+    return invitation.session_id;
   end if;
 
   if invitation.invited_email is not null then
@@ -351,7 +399,83 @@ begin
     user_id = current_user_id,
     invited_email = coalesce(public.session_participants.invited_email, current_user_email),
     role = normalized_role,
-    accepted = true
+    accepted = true,
+    status = 'accepted'
+  where public.session_participants.id = invitation.id;
+
+  return invitation.session_id;
+end;
+$$;
+
+create or replace function public.reject_session_invitation(
+  target_invite_token uuid
+)
+returns bigint
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  invitation record;
+  current_user_id uuid := auth.uid();
+  current_user_email text;
+begin
+  if current_user_id is null then
+    raise exception 'You must be logged in to reject this invitation.';
+  end if;
+
+  current_user_email := lower(
+    coalesce(
+      (select public.users.email from public.users where public.users.id = current_user_id),
+      auth.jwt() ->> 'email'
+    )
+  );
+
+  select
+    public.session_participants.id,
+    public.session_participants.session_id,
+    public.session_participants.user_id,
+    public.session_participants.invited_email,
+    coalesce(public.session_participants.accepted, false) as accepted,
+    coalesce(
+      public.session_participants.status,
+      case when coalesce(public.session_participants.accepted, false) then 'accepted' else 'pending' end
+    ) as status
+  into invitation
+  from public.session_participants
+  where public.session_participants.invite_token = target_invite_token;
+
+  if not found then
+    raise exception 'This invitation link is invalid or has expired.';
+  end if;
+
+  if invitation.user_id is not null and invitation.user_id <> current_user_id then
+    raise exception 'This invitation has already been claimed by another participant.';
+  end if;
+
+  if invitation.invited_email is not null then
+    if current_user_email is null then
+      raise exception 'We could not verify your account email for this invitation.';
+    end if;
+
+    if lower(invitation.invited_email) <> current_user_email and invitation.user_id is distinct from current_user_id then
+      raise exception 'This invitation is reserved for a different email address.';
+    end if;
+  end if;
+
+  if invitation.status = 'accepted' or invitation.accepted then
+    raise exception 'This invitation has already been accepted.';
+  end if;
+
+  if invitation.status = 'rejected' then
+    return invitation.session_id;
+  end if;
+
+  update public.session_participants
+  set
+    invited_email = coalesce(public.session_participants.invited_email, current_user_email),
+    accepted = false,
+    status = 'rejected'
   where public.session_participants.id = invitation.id;
 
   return invitation.session_id;
@@ -457,7 +581,7 @@ on public.session_participants
 for delete
 to authenticated
 using (
-  auth.uid() = user_id or public.is_session_creator(public.session_participants.session_id)
+  public.is_session_creator(public.session_participants.session_id)
 );
 
 drop policy if exists "Users can read related speakers" on public.speakers;
@@ -545,6 +669,11 @@ with check (
   )
   and
   exists (
+
+  grant execute on function public.get_session_invitation(uuid) to anon, authenticated;
+  grant execute on function public.get_my_pending_invitations() to authenticated;
+  grant execute on function public.accept_session_invitation(uuid, text) to authenticated;
+  grant execute on function public.reject_session_invitation(uuid) to authenticated;
     select 1
     from public.speakers
     join public.sessions on public.sessions.id = public.speakers.session_id

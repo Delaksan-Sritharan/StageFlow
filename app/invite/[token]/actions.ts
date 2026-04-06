@@ -14,7 +14,17 @@ export type AcceptInvitationState = {
   };
 };
 
+export type RejectInvitationState = {
+  errors?: {
+    form?: string;
+  };
+};
+
 const initialState: AcceptInvitationState = {
+  errors: {},
+};
+
+const initialRejectState: RejectInvitationState = {
   errors: {},
 };
 
@@ -24,7 +34,8 @@ function isMissingInvitationRpc(error: { code?: string; message?: string } | nul
   return Boolean(
     error?.code === "PGRST202" ||
       error?.message?.includes("get_session_invitation") ||
-      error?.message?.includes("accept_session_invitation"),
+      error?.message?.includes("accept_session_invitation") ||
+      error?.message?.includes("reject_session_invitation"),
   );
 }
 
@@ -84,4 +95,46 @@ export async function acceptInvitation(
   revalidatePath(`/invite/${token}`);
   revalidatePath(`/session/${sessionId}`);
   redirect(`/session/${sessionId}`);
+}
+
+export async function rejectInvitation(
+  token: string,
+  _prevState: RejectInvitationState = initialRejectState,
+): Promise<RejectInvitationState> {
+  void _prevState;
+
+  const cookieStore = await cookies();
+  const supabase = createClient(cookieStore);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect(`/login?redirectTo=${encodeURIComponent(`/invite/${token}`)}`);
+  }
+
+  const { data, error } = await supabase.rpc("reject_session_invitation", {
+    target_invite_token: token,
+  });
+
+  if (error) {
+    return {
+      errors: {
+        form: isMissingInvitationRpc(error)
+          ? "The invite response flow is not set up yet. Run supabase/enable-invite-join-links.sql and try again."
+          : error.message,
+      },
+    };
+  }
+
+  const sessionId = Array.isArray(data) ? data[0] : data;
+
+  revalidatePath("/");
+  revalidatePath(`/invite/${token}`);
+
+  if (sessionId) {
+    revalidatePath(`/session/${sessionId}`);
+  }
+
+  redirect(`/invite/${token}?rejected=1`);
 }
