@@ -1,4 +1,4 @@
-export type SpeakerRole = "Speaker" | "Evaluator" | "Table Topics";
+export type SpeakerRole = "Speaker" | "Evaluator";
 
 export type Session = {
   id: string;

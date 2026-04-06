@@ -14,7 +14,7 @@ const initialState: InviteParticipantFormState = {
   errors: {},
 };
 
-const roles: SpeakerRole[] = ["Speaker", "Evaluator", "Table Topics"];
+const roles: SpeakerRole[] = ["Speaker", "Evaluator"];
 
 type InviteParticipantFormProps = {
   sessionId: string;

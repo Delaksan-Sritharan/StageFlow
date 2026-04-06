@@ -18,7 +18,7 @@ const initialState: AcceptInvitationState = {
   errors: {},
 };
 
-const validRoles: SpeakerRole[] = ["Speaker", "Evaluator", "Table Topics"];
+const validRoles: SpeakerRole[] = ["Speaker", "Evaluator"];
 
 function isMissingInvitationRpc(error: { code?: string; message?: string } | null) {
   return Boolean(

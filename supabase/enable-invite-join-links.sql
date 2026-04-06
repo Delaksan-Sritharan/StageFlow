@@ -93,7 +93,7 @@ begin
     raise exception 'Choose a role before joining this session.';
   end if;
 
-  if normalized_role not in ('Speaker', 'Evaluator', 'Table Topics') then
+  if normalized_role not in ('Speaker', 'Evaluator') then
     raise exception 'Choose a valid role before joining this session.';
   end if;
 

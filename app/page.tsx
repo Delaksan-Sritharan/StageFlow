@@ -11,7 +11,7 @@ type PendingInvitationRow = {
   session_id: number;
   session_title: string;
   session_date: string;
-  assigned_role: "Speaker" | "Evaluator" | "Table Topics" | null;
+  assigned_role: "Speaker" | "Evaluator" | null;
   invite_token: string;
   invited_email: string | null;
 };

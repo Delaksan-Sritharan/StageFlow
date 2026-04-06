@@ -9,7 +9,7 @@ import {
 } from "@/app/invite/[token]/actions";
 import type { SpeakerRole } from "@/types";
 
-const roles: SpeakerRole[] = ["Speaker", "Evaluator", "Table Topics"];
+const roles: SpeakerRole[] = ["Speaker", "Evaluator"];
 
 const initialState: AcceptInvitationState = {
   errors: {},

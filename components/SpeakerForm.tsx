@@ -10,7 +10,7 @@ const initialState: SpeakerFormState = {
   errors: {},
 };
 
-const speakerRoles: SpeakerRole[] = ["Speaker", "Evaluator", "Table Topics"];
+const speakerRoles: SpeakerRole[] = ["Speaker", "Evaluator"];
 
 type SpeakerFormProps = {
   sessionId: string;

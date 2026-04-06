@@ -21,7 +21,7 @@ create table if not exists public.session_participants (
   session_id bigint not null references public.sessions(id) on delete cascade,
   user_id uuid references public.users(id) on delete cascade,
   invited_email text,
-  role text check (role in ('Speaker', 'Evaluator', 'Table Topics')),
+  role text check (role in ('Speaker', 'Evaluator')),
   accepted boolean not null default true,
   invite_token uuid not null default gen_random_uuid(),
   created_at timestamp with time zone not null default now(),
@@ -33,7 +33,7 @@ create table if not exists public.speakers (
   session_id bigint not null references public.sessions(id) on delete cascade,
   session_participant_id bigint references public.session_participants(id) on delete set null,
   name text not null check (char_length(trim(name)) > 0),
-  role text not null check (role in ('Speaker', 'Evaluator', 'Table Topics')),
+  role text not null check (role in ('Speaker', 'Evaluator')),
   min_time integer not null check (min_time >= 0),
   max_time integer not null check (max_time >= min_time),
   created_at timestamp with time zone not null default now()
@@ -72,11 +72,24 @@ from public.speakers
 where public.speakers.id = public.feedback.speaker_id
   and public.feedback.session_participant_id is null;
 
+update public.session_participants
+set role = 'Speaker'
+where role = 'Table Topics';
+
+update public.speakers
+set role = 'Speaker'
+where role = 'Table Topics';
+
 alter table public.session_participants
 drop constraint if exists session_participants_role_check;
+alter table public.speakers
+drop constraint if exists speakers_role_check;
 alter table public.session_participants
 add constraint session_participants_role_check
-check (role is null or role in ('Speaker', 'Evaluator', 'Table Topics'));
+check (role is null or role in ('Speaker', 'Evaluator'));
+alter table public.speakers
+add constraint speakers_role_check
+check (role in ('Speaker', 'Evaluator'));
 
 insert into public.session_participants (session_id, user_id)
 select public.sessions.id, public.sessions.creator_id
@@ -315,7 +328,7 @@ begin
     raise exception 'Choose a role before joining this session.';
   end if;
 
-  if normalized_role not in ('Speaker', 'Evaluator', 'Table Topics') then
+  if normalized_role not in ('Speaker', 'Evaluator') then
     raise exception 'Choose a valid role before joining this session.';
   end if;
 

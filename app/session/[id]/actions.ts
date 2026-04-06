@@ -48,7 +48,7 @@ const initialInviteState: InviteParticipantFormState = {
   errors: {},
 };
 
-const validRoles: SpeakerRole[] = ["Speaker", "Evaluator", "Table Topics"];
+const validRoles: SpeakerRole[] = ["Speaker", "Evaluator"];
 
 function parsePositiveInteger(value: string) {
   if (!/^\d+$/.test(value)) {

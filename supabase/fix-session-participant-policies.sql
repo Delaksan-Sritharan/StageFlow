@@ -58,9 +58,24 @@ alter column invite_token set default gen_random_uuid();
 alter table if exists public.session_participants
 drop constraint if exists session_participants_role_check;
 
+alter table if exists public.speakers
+drop constraint if exists speakers_role_check;
+
+update public.session_participants
+set role = 'Speaker'
+where role = 'Table Topics';
+
+update public.speakers
+set role = 'Speaker'
+where role = 'Table Topics';
+
 alter table if exists public.session_participants
 add constraint session_participants_role_check
-check (role is null or role in ('Speaker', 'Evaluator', 'Table Topics'));
+check (role is null or role in ('Speaker', 'Evaluator'));
+
+alter table if exists public.speakers
+add constraint speakers_role_check
+check (role in ('Speaker', 'Evaluator'));
 
 insert into public.session_participants (session_id, user_id)
 select public.sessions.id, coalesce(public.sessions.creator_id, public.sessions.user_id)
@@ -265,7 +280,7 @@ begin
     raise exception 'Choose a role before joining this session.';
   end if;
 
-  if normalized_role not in ('Speaker', 'Evaluator', 'Table Topics') then
+  if normalized_role not in ('Speaker', 'Evaluator') then
     raise exception 'Choose a valid role before joining this session.';
   end if;
 
