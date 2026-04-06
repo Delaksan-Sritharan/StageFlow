@@ -227,7 +227,7 @@ export default async function SessionDetailPage({
             invitedEmail: null,
             role: null,
             accepted: true,
-            status: "accepted",
+            status: "accepted" as const,
             inviteToken: null,
           },
           ...acceptedParticipantsBase,

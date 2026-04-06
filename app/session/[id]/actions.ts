@@ -699,6 +699,14 @@ export async function createInvitation(
     };
   }
 
+  if (!invitationData?.invite_token) {
+    return {
+      errors: {
+        form: "Invitation was created, but the invite link could not be returned.",
+      },
+    };
+  }
+
   revalidatePath(`/session/${sessionId}`);
 
   if (inviteMode === "link") {
@@ -753,7 +761,11 @@ export async function deleteInvitation(
     .eq("session_id", sessionId)
     .maybeSingle();
 
-  let invitationData = data;
+  let invitationData: {
+    id: unknown;
+    accepted: boolean | null;
+    status?: string | null;
+  } | null = data;
   let invitationError = error;
 
   if (isMissingInvitationStatusColumn(error)) {

@@ -101,8 +101,9 @@ export default async function InvitePage({
   const rejectedByCurrentUser = resolvedSearchParams?.rejected === "1";
 
   if (
+    invitation &&
     invitationStatus === "accepted" &&
-    invitation?.participant_user_id === user?.id
+    invitation.participant_user_id === user?.id
   ) {
     redirect(`/session/${invitation.session_id}`);
   }
