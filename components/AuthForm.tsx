@@ -1,10 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
-import { useFormStatus } from "react-dom";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 
-import { login, signUp, type AuthFormState } from "@/app/auth/actions";
+import {
+  getSafeRedirectPath,
+  type AuthFormState,
+  validateCredentials,
+} from "@/lib/auth";
+import { createClient } from "@/utils/supabase/client";
 
 type AuthMode = "login" | "signup";
 
@@ -17,9 +22,7 @@ const initialState: AuthFormState = {
   errors: {},
 };
 
-function SubmitButton({ mode }: { mode: AuthMode }) {
-  const { pending } = useFormStatus();
-
+function SubmitButton({ mode, pending }: { mode: AuthMode; pending: boolean }) {
   return (
     <button
       type="submit"
@@ -44,11 +47,103 @@ function buildAuthHref(pathname: string, redirectTo?: string) {
 }
 
 export function AuthForm({ mode, redirectTo }: AuthFormProps) {
-  const action = mode === "signup" ? signUp : login;
-  const [state, formAction] = useActionState(action, initialState);
+  const router = useRouter();
+  const [state, setState] = useState(initialState);
+  const [pending, startTransition] = useTransition();
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+    const displayName = formData.get("displayName")?.toString().trim() ?? "";
+    const email = formData.get("email")?.toString().trim().toLowerCase() ?? "";
+    const password = formData.get("password")?.toString() ?? "";
+    const safeRedirectTo = getSafeRedirectPath(
+      redirectTo ?? formData.get("redirectTo"),
+    );
+    const errors = validateCredentials(
+      email,
+      password,
+      mode === "signup" ? displayName : undefined,
+    );
+
+    if (errors.displayName || errors.email || errors.password) {
+      setState({ errors });
+      return;
+    }
+
+    setState(initialState);
+
+    try {
+      const supabase = createClient();
+
+      if (mode === "signup") {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              display_name: displayName || null,
+            },
+          },
+        });
+
+        if (error) {
+          setState({
+            errors: {
+              form: error.message,
+            },
+          });
+          return;
+        }
+
+        if (!data.session) {
+          const params = new URLSearchParams({
+            message: "Check your email to confirm your account.",
+          });
+
+          if (safeRedirectTo !== "/") {
+            params.set("redirectTo", safeRedirectTo);
+          }
+
+          startTransition(() => {
+            router.replace(`/login?${params.toString()}`);
+          });
+          return;
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) {
+          setState({
+            errors: {
+              form: error.message,
+            },
+          });
+          return;
+        }
+      }
+
+      startTransition(() => {
+        router.replace(safeRedirectTo);
+      });
+    } catch (error) {
+      setState({
+        errors: {
+          form:
+            error instanceof Error
+              ? error.message
+              : "Something went wrong while contacting Supabase.",
+        },
+      });
+    }
+  }
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-5">
       {redirectTo ? (
         <input type="hidden" name="redirectTo" value={redirectTo} />
       ) : null}
@@ -123,7 +218,7 @@ export function AuthForm({ mode, redirectTo }: AuthFormProps) {
       ) : null}
 
       <div className="space-y-3 pt-2">
-        <SubmitButton mode={mode} />
+        <SubmitButton mode={mode} pending={pending} />
         <p className="text-center text-sm text-black/58">
           {mode === "signup"
             ? "Already have an account? "
