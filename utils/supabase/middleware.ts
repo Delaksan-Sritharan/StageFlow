@@ -9,7 +9,8 @@ export async function updateSession(request: NextRequest) {
   const authRoutes = ["/login", "/signup"];
   const isAuthRoute = authRoutes.some((route) => pathname === route);
   const isInviteRoute = pathname.startsWith("/invite/");
-  const isPublicRoute = isAuthRoute || isInviteRoute;
+  const isHomeRoute = pathname === "/";
+  const isPublicRoute = isAuthRoute || isInviteRoute || isHomeRoute;
 
   let supabaseResponse = NextResponse.next({
     request: {
