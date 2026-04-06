@@ -9,6 +9,7 @@ import {
   type AuthFormState,
   validateCredentials,
 } from "@/lib/auth";
+import { isSupabaseConfigured } from "@/utils/supabase/config";
 import { createClient } from "@/utils/supabase/client";
 
 type AuthMode = "login" | "signup";
@@ -50,9 +51,19 @@ export function AuthForm({ mode, redirectTo }: AuthFormProps) {
   const router = useRouter();
   const [state, setState] = useState(initialState);
   const [pending, startTransition] = useTransition();
+  const authConfigured = isSupabaseConfigured();
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (!authConfigured) {
+      setState({
+        errors: {
+          form: "Supabase auth is not configured for this app. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY to .env.local, then restart the Next server.",
+        },
+      });
+      return;
+    }
 
     const formData = new FormData(event.currentTarget);
     const displayName = formData.get("displayName")?.toString().trim() ?? "";
@@ -218,7 +229,7 @@ export function AuthForm({ mode, redirectTo }: AuthFormProps) {
       ) : null}
 
       <div className="space-y-3 pt-2">
-        <SubmitButton mode={mode} pending={pending} />
+        <SubmitButton mode={mode} pending={pending || !authConfigured} />
         <p className="text-center text-sm text-black/58">
           {mode === "signup"
             ? "Already have an account? "
