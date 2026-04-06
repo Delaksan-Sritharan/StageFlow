@@ -161,6 +161,19 @@ export function LandingPage() {
           </Link>
         </div>
       </section>
+
+      <footer className="border-t border-black/8 bg-white">
+        <div className="mx-auto flex w-full max-w-7xl justify-center px-6 py-6 text-center md:px-10">
+          <a
+            href="https://www.linkedin.com/in/delaksan-sritharan/"
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs font-semibold uppercase tracking-[0.28em] text-black/45 transition-colors duration-200 hover:text-black"
+          >
+            Open Source Project By Delaksan Sritharan
+          </a>
+        </div>
+      </footer>
     </main>
   );
 }
