@@ -46,6 +46,10 @@ export function InviteParticipantForm({
 }: InviteParticipantFormProps) {
   const inviteForSession = createInvitation.bind(null, sessionId);
   const [state, formAction] = useActionState(inviteForSession, initialState);
+  const inviteLink =
+    typeof window !== "undefined" && state.inviteLink?.startsWith("/")
+      ? `${window.location.origin}${state.inviteLink}`
+      : state.inviteLink;
 
   return (
     <form action={formAction} className="space-y-5">
@@ -109,11 +113,11 @@ export function InviteParticipantForm({
         </p>
       ) : null}
 
-      {state.inviteLink ? (
+      {inviteLink ? (
         <div className="rounded-3xl border border-black/8 bg-white/80 p-4">
           <p className="text-sm font-semibold text-black">Invite link</p>
           <p className="mt-2 break-all text-sm leading-7 text-black/68">
-            {state.inviteLink}
+            {inviteLink}
           </p>
         </div>
       ) : null}
