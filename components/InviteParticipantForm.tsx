@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import QRCode from "react-qr-code";
 
@@ -48,6 +48,8 @@ export function InviteParticipantForm({
   const inviteForSession = createInvitation.bind(null, sessionId);
   const [state, formAction] = useActionState(inviteForSession, initialState);
   const [copied, setCopied] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const qrCodeContainerRef = useRef<HTMLDivElement | null>(null);
   const inviteLink =
     typeof window !== "undefined" && state.inviteLink?.startsWith("/")
       ? `${window.location.origin}${state.inviteLink}`
@@ -74,6 +76,57 @@ export function InviteParticipantForm({
 
     await navigator.clipboard.writeText(inviteLink);
     setCopied(true);
+  };
+
+  const handleDownloadQrCode = async () => {
+    const svg = qrCodeContainerRef.current?.querySelector("svg");
+
+    if (!svg || !inviteLink) {
+      return;
+    }
+
+    setIsDownloading(true);
+
+    try {
+      const serializer = new XMLSerializer();
+      const svgMarkup = serializer.serializeToString(svg);
+      const svgBlob = new Blob([svgMarkup], {
+        type: "image/svg+xml;charset=utf-8",
+      });
+      const svgUrl = window.URL.createObjectURL(svgBlob);
+      const image = new Image();
+
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error("Failed to load QR image."));
+        image.src = svgUrl;
+      });
+
+      const canvas = document.createElement("canvas");
+      const size = 336;
+      canvas.width = size;
+      canvas.height = size;
+
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        throw new Error("Canvas is not available.");
+      }
+
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, size, size);
+      context.drawImage(image, 0, 0, size, size);
+
+      const pngUrl = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.href = pngUrl;
+      link.download = "stageflow-invite-qr.png";
+      link.click();
+
+      window.URL.revokeObjectURL(svgUrl);
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   return (
@@ -150,6 +203,14 @@ export function InviteParticipantForm({
               ) : null}
               <button
                 type="button"
+                onClick={handleDownloadQrCode}
+                disabled={isDownloading}
+                className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs font-semibold text-black transition-colors duration-200 hover:bg-black/3 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {isDownloading ? "Preparing PNG..." : "Download QR Code"}
+              </button>
+              <button
+                type="button"
                 onClick={handleCopyInviteLink}
                 className="inline-flex items-center justify-center rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition-transform duration-200 hover:-translate-y-0.5"
               >
@@ -158,7 +219,10 @@ export function InviteParticipantForm({
             </div>
           </div>
           <div className="mt-5 flex justify-center">
-            <div className="flex flex-col items-center gap-3 rounded-3xl border border-black/8 bg-white p-4 text-center shadow-[0_12px_40px_rgba(15,23,42,0.05)]">
+            <div
+              ref={qrCodeContainerRef}
+              className="flex flex-col items-center gap-3 rounded-3xl border border-black/8 bg-white p-4 text-center shadow-[0_12px_40px_rgba(15,23,42,0.05)]"
+            >
               <QRCode value={inviteLink} size={168} />
               <p className="text-xs leading-6 text-black/52">
                 Scan to open the invite link
