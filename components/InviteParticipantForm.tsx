@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
+import QRCode from "react-qr-code";
 
 import {
   createInvitation,
@@ -154,6 +155,14 @@ export function InviteParticipantForm({
               >
                 Copy Invite Link
               </button>
+            </div>
+          </div>
+          <div className="mt-5 flex justify-center">
+            <div className="flex flex-col items-center gap-3 rounded-3xl border border-black/8 bg-white p-4 text-center shadow-[0_12px_40px_rgba(15,23,42,0.05)]">
+              <QRCode value={inviteLink} size={168} />
+              <p className="text-xs leading-6 text-black/52">
+                Scan to open the invite link
+              </p>
             </div>
           </div>
           <p className="mt-2 break-all text-sm leading-7 text-black/68">
