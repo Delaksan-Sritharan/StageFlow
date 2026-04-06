@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { cookies } from "next/headers";
 
 import { logout } from "@/app/auth/actions";
@@ -25,16 +26,25 @@ export async function AppNavbar() {
   return (
     <header className="sticky top-0 z-40 border-b border-black/8 bg-white/72 backdrop-blur-xl">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-5 py-4 md:flex-row md:items-center md:justify-between md:px-8">
-        <div className="space-y-1">
-          <Link
-            href="/"
-            className="text-lg font-semibold tracking-[-0.04em] text-black"
-          >
-            StageFlow
+        <div>
+          <Link href="/" className="inline-flex items-center gap-3 text-black">
+            <Image
+              src="/stageflow-logo.svg"
+              alt="StageFlow logo"
+              width={128}
+              height={128}
+              className="h-10 w-auto shrink-0"
+              priority
+            />
+            <span className="flex min-w-0 flex-col">
+              <span className="text-lg font-semibold tracking-[-0.04em] text-black">
+                StageFlow
+              </span>
+              <span className="text-xs uppercase tracking-[0.24em] text-black/45">
+                Speaker sessions and timing
+              </span>
+            </span>
           </Link>
-          <p className="text-xs uppercase tracking-[0.24em] text-black/45">
-            Speaker sessions and timing
-          </p>
         </div>
 
         <nav className="flex flex-wrap items-center gap-2">
