@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import {
@@ -46,10 +46,34 @@ export function InviteParticipantForm({
 }: InviteParticipantFormProps) {
   const inviteForSession = createInvitation.bind(null, sessionId);
   const [state, formAction] = useActionState(inviteForSession, initialState);
+  const [copied, setCopied] = useState(false);
   const inviteLink =
     typeof window !== "undefined" && state.inviteLink?.startsWith("/")
       ? `${window.location.origin}${state.inviteLink}`
       : state.inviteLink;
+
+  useEffect(() => {
+    if (!copied) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setCopied(false);
+    }, 2000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [copied]);
+
+  const handleCopyInviteLink = async () => {
+    if (!inviteLink) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(inviteLink);
+    setCopied(true);
+  };
 
   return (
     <form action={formAction} className="space-y-5">
@@ -115,7 +139,23 @@ export function InviteParticipantForm({
 
       {inviteLink ? (
         <div className="rounded-3xl border border-black/8 bg-white/80 p-4">
-          <p className="text-sm font-semibold text-black">Invite link</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-semibold text-black">Invite link</p>
+            <div className="flex items-center gap-3">
+              {copied ? (
+                <p className="text-sm font-semibold text-emerald-700">
+                  Copied!
+                </p>
+              ) : null}
+              <button
+                type="button"
+                onClick={handleCopyInviteLink}
+                className="inline-flex items-center justify-center rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition-transform duration-200 hover:-translate-y-0.5"
+              >
+                Copy Invite Link
+              </button>
+            </div>
+          </div>
           <p className="mt-2 break-all text-sm leading-7 text-black/68">
             {inviteLink}
           </p>
