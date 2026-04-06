@@ -91,6 +91,10 @@ function isMissingAssignedEvaluatorColumn(error: { message?: string } | null) {
   );
 }
 
+function isMissingEvaluationModeColumn(error: { message?: string } | null) {
+  return Boolean(error?.message?.includes("evaluation_mode"));
+}
+
 async function userOwnsSession(supabase: ReturnType<typeof createClient>, sessionId: string, userId: string) {
   const { data, error } = await supabase
     .from("sessions")
@@ -172,15 +176,23 @@ async function getSessionEvaluationMode(
   supabase: ReturnType<typeof createClient>,
   sessionId: string,
 ) {
-  const { data, error } = await supabase
+  const result = await supabase
     .from("sessions")
     .select("evaluation_mode")
     .eq("id", sessionId)
     .maybeSingle();
 
+  if (isMissingEvaluationModeColumn(result.error)) {
+    return {
+      evaluationMode: "open" as EvaluationMode,
+      error: null,
+    };
+  }
+
   return {
-    evaluationMode: (data?.evaluation_mode as EvaluationMode | undefined) ?? "open",
-    error,
+    evaluationMode:
+      (result.data?.evaluation_mode as EvaluationMode | undefined) ?? "open",
+    error: result.error,
   };
 }
 

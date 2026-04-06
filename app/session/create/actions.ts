@@ -14,6 +14,10 @@ function isMissingCreatorIdColumn(error: { message?: string } | null) {
   return Boolean(error?.message?.includes("creator_id"));
 }
 
+function isMissingEvaluationModeColumn(error: { message?: string } | null) {
+  return Boolean(error?.message?.includes("evaluation_mode"));
+}
+
 function isSessionsInsertPolicyMismatch(error: {
   code?: string;
   message?: string;
@@ -31,10 +35,38 @@ async function insertSessionWithCompatibility(
   values: { title: string; date: string; evaluation_mode: EvaluationMode },
   userId: string,
 ) {
-  const attempts = [
-    { ...values, creator_id: userId, user_id: userId },
-    { ...values, creator_id: userId },
-    { ...values, user_id: userId },
+  const attempts: Array<{
+    payload: Record<string, string>;
+    requiresEvaluationMode: boolean;
+  }> = [
+    {
+      payload: { ...values, creator_id: userId, user_id: userId },
+      requiresEvaluationMode: true,
+    },
+    {
+      payload: { ...values, creator_id: userId },
+      requiresEvaluationMode: true,
+    },
+    {
+      payload: { ...values, user_id: userId },
+      requiresEvaluationMode: true,
+    },
+    ...(values.evaluation_mode === "open"
+      ? [
+          {
+            payload: { title: values.title, date: values.date, creator_id: userId, user_id: userId },
+            requiresEvaluationMode: false,
+          },
+          {
+            payload: { title: values.title, date: values.date, creator_id: userId },
+            requiresEvaluationMode: false,
+          },
+          {
+            payload: { title: values.title, date: values.date, user_id: userId },
+            requiresEvaluationMode: false,
+          },
+        ]
+      : []),
   ];
 
   let lastResult: {
@@ -45,8 +77,8 @@ async function insertSessionWithCompatibility(
     error: null,
   };
 
-  for (const payload of attempts) {
-    const result = await supabase.from("sessions").insert(payload);
+  for (const attempt of attempts) {
+    const result = await supabase.from("sessions").insert(attempt.payload);
 
     lastResult = {
       data: null,
@@ -59,7 +91,9 @@ async function insertSessionWithCompatibility(
 
     const shouldContinue =
       isMissingCreatorIdColumn(result.error) ||
-      isSessionsInsertPolicyMismatch(result.error);
+      isSessionsInsertPolicyMismatch(result.error) ||
+      (attempt.requiresEvaluationMode &&
+        isMissingEvaluationModeColumn(result.error));
 
     if (!shouldContinue) {
       return lastResult;
@@ -187,11 +221,14 @@ export async function createSession(
     const isMissingTable =
       error.code === "PGRST205" ||
       error.message?.includes("Could not find the table 'public.sessions'");
+    const missingEvaluationMode = isMissingEvaluationModeColumn(error);
 
     return {
       errors: {
         form: isMissingTable
           ? "The sessions table is not set up yet. Run the SQL in supabase/sessions.sql and try again."
+          : missingEvaluationMode && evaluationMode === "assigned"
+            ? "Assigned evaluation mode is not set up in Supabase yet. Run supabase/enable-assigned-evaluation-mode.sql and try again."
           : isSessionsInsertPolicyMismatch(error)
             ? "The session insert policy in Supabase is still outdated. Run supabase/fix-session-participant-policies.sql and try again."
           : `Failed to save session: ${error.message}`,

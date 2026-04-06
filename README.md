@@ -70,6 +70,20 @@ If invite links are the only missing piece in an existing database, you can run:
 supabase/enable-invite-join-links.sql
 ```
 
+If your database already has the base tables and you only need assigned evaluation mode,
+run:
+
+```bash
+supabase/enable-assigned-evaluation-mode.sql
+```
+
+If your existing database is missing several StageFlow upgrades, run the broader repair
+script instead:
+
+```bash
+supabase/fix-session-participant-policies.sql
+```
+
 ## Deployment
 
 Deploy on Vercel:
