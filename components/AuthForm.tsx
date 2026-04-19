@@ -23,11 +23,19 @@ const initialState: AuthFormState = {
   errors: {},
 };
 
-function SubmitButton({ mode, pending }: { mode: AuthMode; pending: boolean }) {
+function SubmitButton({
+  mode,
+  pending,
+  disabled,
+}: {
+  mode: AuthMode;
+  pending: boolean;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || disabled}
       className="inline-flex w-full items-center justify-center rounded-full bg-black px-5 py-3 text-sm font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
     >
       {pending
@@ -229,7 +237,7 @@ export function AuthForm({ mode, redirectTo }: AuthFormProps) {
       ) : null}
 
       <div className="space-y-3 pt-2">
-        <SubmitButton mode={mode} pending={pending || !authConfigured} />
+        <SubmitButton mode={mode} pending={pending} disabled={!authConfigured} />
         <p className="text-center text-sm text-black/58">
           {mode === "signup"
             ? "Already have an account? "
