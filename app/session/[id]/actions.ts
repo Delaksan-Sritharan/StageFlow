@@ -19,6 +19,7 @@ export type SpeakerFormState = {
 };
 
 export type FeedbackFormState = {
+  success?: boolean;
   errors?: {
     contentScore?: string;
     deliveryScore?: string;
@@ -593,7 +594,7 @@ export async function submitFeedback(
 
   revalidatePath(`/session/${sessionId}`);
 
-  return initialFeedbackState;
+  return { success: true, errors: {} };
 }
 
 export async function createInvitation(

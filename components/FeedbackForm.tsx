@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
@@ -131,11 +131,52 @@ export function FeedbackForm({
   const [contentScore, setContentScore] = useState<number | null>(null);
   const [deliveryScore, setDeliveryScore] = useState<number | null>(null);
   const [confidenceScore, setConfidenceScore] = useState<number | null>(null);
+  const [showToast, setShowToast] = useState(false);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (state.success) {
+      setContentScore(null);
+      setDeliveryScore(null);
+      setConfidenceScore(null);
+      setShowToast(true);
+
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => setShowToast(false), 3500);
+    }
+  }, [state.success]);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   const isDisabled = Boolean(disabledReason);
 
   return (
     <div className="space-y-5">
+      {/* Success toast */}
+      <div
+        aria-live="polite"
+        className={`pointer-events-none fixed bottom-6 right-6 z-50 transition-all duration-300 ${
+          showToast
+            ? "translate-y-0 opacity-100"
+            : "translate-y-3 opacity-0"
+        }`}
+      >
+        <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3.5 shadow-[0_8px_30px_rgba(16,185,129,0.18)]">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
+            <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+              <path d="M1 4l2.5 2.5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </span>
+          <p className="text-sm font-semibold text-emerald-800">
+            Feedback submitted
+          </p>
+        </div>
+      </div>
+
       {disabledReason ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
           {disabledReason}
