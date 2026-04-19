@@ -45,3 +45,14 @@ export type Feedback = {
   comment: string | null;
   createdAt?: string;
 };
+
+export type SpeakerTimerState = {
+  speakerId: string;
+  sessionId: string;
+  isRunning: boolean;
+  isFinished: boolean;
+  startedAt: string | null;
+  pausedElapsedMs: number;
+  startedByUserId: string | null;
+  startedByName: string | null;
+};

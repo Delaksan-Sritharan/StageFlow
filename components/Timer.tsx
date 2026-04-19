@@ -6,8 +6,16 @@ type TimerProps = {
   minTime: number;
   maxTime: number;
   className?: string;
-  canStart?: boolean;
+  // When these are omitted the timer runs in standalone (demo) mode
+  isRunning?: boolean;
+  startedAt?: string | null;
+  pausedElapsedMs?: number;
+  startedByLabel?: string | null;
+  canControl?: boolean;
   startDisabledMessage?: string;
+  onStart?: () => void;
+  onPause?: (elapsedMs: number) => void;
+  onReset?: () => void;
 };
 
 type TimerTone = "green" | "yellow" | "red";
@@ -78,39 +86,68 @@ export function Timer({
   minTime,
   maxTime,
   className,
-  canStart = true,
+  isRunning: serverIsRunning,
+  startedAt,
+  pausedElapsedMs = 0,
+  startedByLabel,
+  canControl = true,
   startDisabledMessage,
+  onStart,
+  onPause,
+  onReset,
 }: TimerProps) {
+  const isServerDriven = onStart !== undefined;
   const minThreshold = Math.max(0, Math.floor(minTime));
   const maxThreshold = Math.max(minThreshold, Math.floor(maxTime));
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const [isRunning, setIsRunning] = useState(false);
+
+  // Standalone mode: internal state
+  const [standaloneRunning, setStandaloneRunning] = useState(false);
+  const standaloneElapsedRef = useRef(0);
+
+  const isRunning = isServerDriven ? (serverIsRunning ?? false) : standaloneRunning;
+
+  const [displayMs, setDisplayMs] = useState(pausedElapsedMs);
+  const displayMsRef = useRef(pausedElapsedMs);
   const frameRef = useRef<number | null>(null);
-  const startedAtRef = useRef<number | null>(null);
-  const storedElapsedRef = useRef(0);
 
   useEffect(() => {
-    if (!isRunning) {
-      if (frameRef.current !== null) {
-        cancelAnimationFrame(frameRef.current);
-        frameRef.current = null;
-      }
-
-      return;
+    if (frameRef.current !== null) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
     }
 
-    const tick = (timestamp: number) => {
-      if (startedAtRef.current === null) {
-        startedAtRef.current = timestamp;
+    if (isRunning) {
+      if (isServerDriven && startedAt) {
+        const startedAtMs = new Date(startedAt).getTime();
+
+        const tick = () => {
+          const elapsed = pausedElapsedMs + (Date.now() - startedAtMs);
+
+          displayMsRef.current = elapsed;
+          setDisplayMs(elapsed);
+          frameRef.current = requestAnimationFrame(tick);
+        };
+
+        frameRef.current = requestAnimationFrame(tick);
+      } else if (!isServerDriven) {
+        // Standalone: tick from storedElapsed
+        const startTs = performance.now();
+
+        const tick = (now: number) => {
+          const elapsed =
+            standaloneElapsedRef.current + (now - startTs);
+
+          displayMsRef.current = elapsed;
+          setDisplayMs(elapsed);
+          frameRef.current = requestAnimationFrame(tick);
+        };
+
+        frameRef.current = requestAnimationFrame(tick);
       }
-
-      setElapsedMs(
-        storedElapsedRef.current + (timestamp - startedAtRef.current),
-      );
-      frameRef.current = requestAnimationFrame(tick);
-    };
-
-    frameRef.current = requestAnimationFrame(tick);
+    } else {
+      displayMsRef.current = pausedElapsedMs;
+      setDisplayMs(pausedElapsedMs);
+    }
 
     return () => {
       if (frameRef.current !== null) {
@@ -118,7 +155,8 @@ export function Timer({
         frameRef.current = null;
       }
     };
-  }, [isRunning]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRunning, startedAt, pausedElapsedMs, isServerDriven]);
 
   useEffect(() => {
     return () => {
@@ -128,41 +166,40 @@ export function Timer({
     };
   }, []);
 
-  const elapsedSeconds = Math.floor(elapsedMs / 1000);
-  const tone = getTone(elapsedSeconds, minThreshold, maxThreshold);
-  const progressWidth = `${Math.min((elapsedSeconds / maxThreshold) * 100, 100)}%`;
-  const currentStyles = toneStyles[tone];
-
   const handleStart = () => {
-    if (isRunning) {
-      return;
+    if (isServerDriven) {
+      onStart?.();
+    } else {
+      setStandaloneRunning(true);
     }
-
-    startedAtRef.current = null;
-    setIsRunning(true);
   };
 
   const handlePause = () => {
-    if (!isRunning) {
-      return;
-    }
+    if (!isRunning) return;
 
-    storedElapsedRef.current = elapsedMs;
-    startedAtRef.current = null;
-    setIsRunning(false);
+    if (isServerDriven) {
+      onPause?.(displayMsRef.current);
+    } else {
+      standaloneElapsedRef.current = displayMsRef.current;
+      setStandaloneRunning(false);
+    }
   };
 
   const handleReset = () => {
-    if (frameRef.current !== null) {
-      cancelAnimationFrame(frameRef.current);
-      frameRef.current = null;
+    if (isServerDriven) {
+      onReset?.();
+    } else {
+      standaloneElapsedRef.current = 0;
+      displayMsRef.current = 0;
+      setDisplayMs(0);
+      setStandaloneRunning(false);
     }
-
-    startedAtRef.current = null;
-    storedElapsedRef.current = 0;
-    setElapsedMs(0);
-    setIsRunning(false);
   };
+
+  const elapsedSeconds = Math.floor(displayMs / 1000);
+  const tone = getTone(elapsedSeconds, minThreshold, maxThreshold);
+  const progressWidth = `${Math.min((elapsedSeconds / maxThreshold) * 100, 100)}%`;
+  const currentStyles = toneStyles[tone];
 
   const statusLabel =
     tone === "green"
@@ -188,6 +225,11 @@ export function Timer({
         >
           {formatTime(elapsedSeconds)}
         </p>
+        {startedByLabel ? (
+          <p className="text-sm text-black/55">
+            Started by {startedByLabel}
+          </p>
+        ) : null}
       </div>
 
       <div className="relative w-full max-w-lg space-y-5">
@@ -200,37 +242,38 @@ export function Timer({
           />
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <button
-            type="button"
-            onClick={handleStart}
-            disabled={isRunning || !canStart}
-            className="inline-flex items-center justify-center rounded-full bg-black px-4 py-3 text-sm font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
-          >
-            Start
-          </button>
-          <button
-            type="button"
-            onClick={handlePause}
-            disabled={!isRunning}
-            className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Pause
-          </button>
-          <button
-            type="button"
-            onClick={handleReset}
-            className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3"
-          >
-            Reset
-          </button>
-        </div>
-
-        {!canStart && startDisabledMessage ? (
+        {canControl ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <button
+              type="button"
+              onClick={handleStart}
+              disabled={isRunning}
+              className="inline-flex items-center justify-center rounded-full bg-black px-4 py-3 text-sm font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
+            >
+              Start
+            </button>
+            <button
+              type="button"
+              onClick={handlePause}
+              disabled={!isRunning}
+              className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Pause
+            </button>
+            <button
+              type="button"
+              onClick={handleReset}
+              className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-black transition-colors duration-200 hover:bg-black/3"
+            >
+              Reset
+            </button>
+          </div>
+        ) : (
           <p className="text-sm leading-7 text-black/56">
-            {startDisabledMessage}
+            {startDisabledMessage ??
+              "Timer control is reserved for the session creator and evaluator."}
           </p>
-        ) : null}
+        )}
       </div>
 
       <div className="relative flex flex-wrap items-center justify-center gap-3 text-sm text-black/60">
