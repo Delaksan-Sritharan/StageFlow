@@ -137,9 +137,13 @@ export function AuthForm({ mode, redirectTo }: AuthFormProps) {
         });
 
         if (error) {
+          const isInvalidCredentials =
+            error.message.toLowerCase().includes("invalid login credentials");
           setState({
             errors: {
-              form: error.message,
+              form: isInvalidCredentials
+                ? "Invalid email or password. If you just signed up, please confirm your email first."
+                : error.message,
             },
           });
           return;
