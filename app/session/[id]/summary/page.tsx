@@ -72,6 +72,16 @@ export default async function SessionSummaryPage({
         .order("created_at", { ascending: false })
     : { data: [], error: null };
 
+  const participantUserIds = (participantsData ?? [])
+    .map((p) => p.user_id)
+    .filter(Boolean) as string[];
+  const { data: usersData } = participantUserIds.length
+    ? await supabase
+        .from("users")
+        .select("id, email, display_name")
+        .in("id", participantUserIds)
+    : { data: [] };
+
   const showSetupState =
     isMissingTable(sessionError, "sessions") ||
     isMissingTable(participantsError, "session_participants") ||
@@ -109,14 +119,28 @@ export default async function SessionSummaryPage({
       inviteToken: participant.invite_token ?? null,
     })) ?? [];
 
-  const authorLabels = Object.fromEntries(
-    participants
-      .filter((participant) => participant.userId)
-      .map((participant) => [
-        participant.userId as string,
-        participant.invitedEmail ?? participant.role ?? "Participant",
-      ]),
+  const userNameMap = Object.fromEntries(
+    (usersData ?? []).map((u) => [
+      String(u.id),
+      (u.display_name as string | null) ?? (u.email as string | null) ?? null,
+    ]),
   );
+
+  const authorLabels: Record<string, string> = {};
+
+  if (sessionOwnerId) {
+    authorLabels[sessionOwnerId] =
+      userNameMap[sessionOwnerId] ?? "Session creator";
+  }
+
+  for (const participant of participants) {
+    if (!participant.userId) continue;
+    authorLabels[participant.userId] =
+      userNameMap[participant.userId] ??
+      participant.invitedEmail ??
+      participant.role ??
+      "Participant";
+  }
 
   const feedbackBySpeaker = new Map<string, Feedback[]>();
 
