@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 
 import { DeleteSessionButton } from "@/components/DeleteSessionButton";
 import { InviteParticipantForm } from "@/components/InviteParticipantForm";
+import { RealtimeUpdater } from "@/components/RealtimeUpdater";
 import { SessionLiveWorkspace } from "@/components/SessionLiveWorkspace";
 import { SpeakerForm } from "@/components/SpeakerForm";
 import { SessionParticipantsList } from "@/components/SessionParticipantsList";
@@ -14,6 +15,7 @@ import type {
   InvitationStatus,
   SessionParticipant,
   Speaker,
+  SpeakerTimerState,
 } from "@/types";
 import { createClient } from "@/utils/supabase/server";
 
@@ -180,6 +182,15 @@ export default async function SessionDetailPage({
         .order("created_at", { ascending: false })
     : { data: [], error: null };
 
+  const { data: timerStatesData } = speakerIds.length
+    ? await supabase
+        .from("speaker_timer_states")
+        .select(
+          "speaker_id, session_id, is_running, is_finished, started_at, paused_elapsed_ms, started_by_user_id, started_by_name",
+        )
+        .in("speaker_id", speakerIds)
+    : { data: [] };
+
   const showSetupState =
     isMissingSessionsTable(error) || isBrokenParticipantsPolicy(error);
   const showParticipantsSetupState =
@@ -255,6 +266,11 @@ export default async function SessionDetailPage({
   );
   const hasRoleBasedAccess = Boolean(isCreator || viewerParticipant);
   const viewerRole = isCreator ? null : (viewerParticipant?.role ?? null);
+  const viewerLabel = isCreator
+    ? "Session creator"
+    : (viewerParticipant
+        ? (participantLabels[viewerParticipant.id] ?? "Participant")
+        : "Participant");
   const evaluationMode =
     (session?.evaluation_mode as EvaluationMode | undefined) ?? "open";
   const speakers: Speaker[] =
@@ -299,11 +315,22 @@ export default async function SessionDetailPage({
   const serializedFeedbackBySpeaker = Object.fromEntries(
     Array.from(feedbackBySpeaker.entries()),
   );
-  const liveWorkspaceKey = [
-    speakers.map((speaker) => speaker.id).join(","),
-    Object.keys(serializedFeedbackBySpeaker).sort().join(","),
-    acceptedParticipants.map((participant) => participant.id).join(","),
-  ].join("|");
+  const initialTimerStates: Record<string, SpeakerTimerState> =
+    Object.fromEntries(
+      (timerStatesData ?? []).map((row) => [
+        String(row.speaker_id),
+        {
+          speakerId: String(row.speaker_id),
+          sessionId: String(row.session_id),
+          isRunning: row.is_running ?? false,
+          isFinished: row.is_finished ?? false,
+          startedAt: row.started_at ?? null,
+          pausedElapsedMs: row.paused_elapsed_ms ?? 0,
+          startedByUserId: row.started_by_user_id ?? null,
+          startedByName: row.started_by_name ?? null,
+        } satisfies SpeakerTimerState,
+      ]),
+    );
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-6 py-12 md:px-10">
@@ -431,18 +458,25 @@ export default async function SessionDetailPage({
                     Failed to load feedback: {feedbackError.message}
                   </section>
                 ) : (
-                  <SessionLiveWorkspace
-                    key={liveWorkspaceKey}
-                    sessionId={id}
-                    evaluationMode={evaluationMode}
-                    isCreator={isCreator}
-                    viewerParticipantId={viewerParticipant?.id ?? null}
-                    viewerRole={viewerRole}
-                    speakers={speakers}
-                    participantLabels={participantLabels}
-                    authorLabels={authorLabels}
-                    feedbackBySpeaker={serializedFeedbackBySpeaker}
-                  />
+                  <>
+                    <RealtimeUpdater
+                      sessionId={id}
+                      speakerIds={speakerIds}
+                    />
+                    <SessionLiveWorkspace
+                      sessionId={id}
+                      evaluationMode={evaluationMode}
+                      isCreator={isCreator}
+                      viewerParticipantId={viewerParticipant?.id ?? null}
+                      viewerRole={viewerRole}
+                      viewerLabel={viewerLabel}
+                      speakers={speakers}
+                      participantLabels={participantLabels}
+                      authorLabels={authorLabels}
+                      feedbackBySpeaker={serializedFeedbackBySpeaker}
+                      initialTimerStates={initialTimerStates}
+                    />
+                  </>
                 )}
               </section>
 
