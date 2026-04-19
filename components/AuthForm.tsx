@@ -67,7 +67,7 @@ export function AuthForm({ mode, redirectTo }: AuthFormProps) {
     if (!authConfigured) {
       setState({
         errors: {
-          form: "Supabase auth is not configured for this app. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY to .env.local, then restart the Next server.",
+          form: "Supabase auth is not configured for this app. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY to .env.local, then restart the Next server.",
         },
       });
       return;
