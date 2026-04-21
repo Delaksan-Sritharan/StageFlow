@@ -11,7 +11,7 @@ StageFlow is an open source speaker timer and session manager for Toastmasters c
 - **Feedback forms** — visual 1–10 score picker for content, delivery, and confidence; colour-coded (red / amber / green); auto-resets after successful submission with a toast confirmation
 - **Speaker self-feedback blocked** — speakers cannot submit feedback for their own speech on both the client and server
 - **Evaluation modes** — open mode (anyone can give feedback) and assigned mode (only the designated evaluator for each speaker)
-- **Invite system** — email invitations and shareable link invitations with QR code download; invitees choose to accept or reject before joining
+- **Invite system** — email invitations and shareable link invitations with QR code download; generated links are displayed as full absolute URLs (e.g. `https://your-domain.com/invite/<token>`); invitees choose to accept or reject before joining
 - **Real-time data updates** — feedback, speaker, and participant changes from other users appear automatically without a manual refresh
 - **Session summary** — aggregated feedback view for session creators
 
@@ -44,7 +44,7 @@ cp .env.example .env.local
 Required variables:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 
 ## Database setup
 
@@ -100,7 +100,7 @@ Fixes infinite recursion or broken policies on `session_participants` without re
 | `/session/create` | Create a new session |
 | `/session/[id]` | Live session — timer, feedback, speaker management, invitations |
 | `/session/[id]/summary` | Aggregated feedback summary (creator only) |
-| `/invite/[token]` | Invitation acceptance page with auth redirect |
+| `/invite/[token]` | Invitation acceptance page; link displayed as full URL derived from request origin |
 | `/timer` | Standalone timer demo |
 
 ## Session roles
@@ -118,7 +118,7 @@ Fixes infinite recursion or broken policies on `session_participants` without re
 2. In Vercel, choose **Add New Project** and import the repository.
 3. Set these environment variables in the project settings:
    - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`
+   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 4. Keep the default build command: `next build`.
 5. Deploy the project.
 6. After the first deploy, run the SQL migrations in order against your production Supabase project.
