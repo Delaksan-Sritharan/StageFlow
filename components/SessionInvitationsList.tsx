@@ -1,3 +1,5 @@
+import { headers } from "next/headers";
+
 import { DeleteInvitationButton } from "@/components/DeleteInvitationButton";
 import type { SessionParticipant } from "@/types";
 
@@ -28,10 +30,15 @@ function getStatusClassName(status: SessionParticipant["status"]) {
   }
 }
 
-export function SessionInvitationsList({
+export async function SessionInvitationsList({
   sessionId,
   invitations,
 }: SessionInvitationsListProps) {
+  const headersList = await headers();
+  const host = headersList.get("host") ?? "localhost:3000";
+  const proto = headersList.get("x-forwarded-proto") ?? "https";
+  const baseUrl = `${proto}://${host}`;
+
   if (invitations.length === 0) {
     return (
       <p className="rounded-3xl border border-black/8 bg-white/80 px-4 py-3 text-sm text-black/62">
@@ -81,7 +88,7 @@ export function SessionInvitationsList({
 
           {invitation.inviteToken ? (
             <p className="mt-3 break-all text-sm leading-7 text-black/66">
-              /invite/{invitation.inviteToken}
+              {baseUrl}/invite/{invitation.inviteToken}
             </p>
           ) : null}
         </article>
